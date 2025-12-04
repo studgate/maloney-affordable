@@ -1,0 +1,50 @@
+/**
+ * Main CSS for WP Engine Update Source Selector.
+ *
+ * A high proportion of these styles have been borrowed from Site Health.
+ *
+ * @package WPE_Update_Source_Selector
+ */
+
+@use "colors";
+@use "header";
+@use "content";
+
+body.wpe-update-source-selector #wpcontent, body.wpe-update-source-selector.auto-fold #wpcontent {
+	padding-left: 0;
+
+	// Make sure notices match content width.
+	.notice {
+		max-width: 800px;
+		margin: 0 auto;
+		box-sizing: border-box;
+
+		p {
+			font-size: 14px;
+		}
+
+		&.wpe-update-source-selector-host-override-warning {
+			h2 {
+				display: flex;
+				flex-direction: row;
+				gap: 0.5rem;
+				align-items: center;
+				font-size: 14px;
+
+				img.icon {
+					height: 18px;
+				}
+			}
+		}
+
+		// Hide notices that aren't ours.
+		&:not(.wpe-update-source-selector-notice) {
+			display: none;
+		}
+
+		// ... but make sure the generic settings updated notice is shown.
+		&.notice-success.settings-error.is-dismissible {
+			display: block;
+		}
+	}
+}

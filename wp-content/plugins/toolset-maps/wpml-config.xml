@@ -1,0 +1,23 @@
+<wpml-config>
+	<shortcodes>
+		<shortcode>
+			<tag label="Marker">wpv-map-marker</tag>
+			<attributes>
+				<attribute label="Hint content (displayed on hover)">marker_title</attribute>
+			</attributes>
+		</shortcode>
+		<shortcode>
+			<tag label="Geolocation">wpv-geolocation</tag>
+			<attributes>
+				<attribute label="Message to show before geolocation is obtained">message_when_missing</attribute>
+			</attributes>
+		</shortcode>
+		<shortcode>
+			<tag label="Distance filter">wpv-control-distance</tag>
+			<attributes>
+				<attribute label="Text and placeholders for input fields">inputs_placeholder</attribute>
+				<attribute label="Text for visitor location button">visitor_location_button_text</attribute>
+			</attributes>
+		</shortcode>
+	</shortcodes>
+</wpml-config>

@@ -1,0 +1,182 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: WPForms Geolocation 2.11.0\n"
+"Report-Msgid-Bugs-To: https://wpforms.com/support/\n"
+"Last-Translator: WPForms <support@wpforms.com>\n"
+"Language-Team: WPForms <support@wpforms.com>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2025-03-26T13:17:34+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.7.1\n"
+"X-Domain: wpforms-geolocation\n"
+
+#. Plugin Name of the plugin
+msgid "WPForms Geolocation"
+msgstr ""
+
+#. Plugin URI of the plugin
+#. Author URI of the plugin
+msgid "https://wpforms.com"
+msgstr ""
+
+#. Description of the plugin
+msgid "Display geolocation details with WPForms."
+msgstr ""
+
+#. Author of the plugin
+msgid "WPForms"
+msgstr ""
+
+#: src/Admin/Builder.php:134
+msgid "Enable Address Autocomplete"
+msgstr ""
+
+#: src/Admin/Builder.php:152
+msgid "Display Map"
+msgstr ""
+
+#: src/Admin/Builder.php:170
+msgid "Map location"
+msgstr ""
+
+#: src/Admin/Builder.php:172
+msgid "Above field"
+msgstr ""
+
+#: src/Admin/Builder.php:173
+msgid "Below field"
+msgstr ""
+
+#: src/Admin/Builder.php:195
+msgid "Places API connection is required when using the autocomplete field."
+msgstr ""
+
+#: src/Admin/Builder.php:196
+msgid "To proceed please go to the WPForms Settings > Geolocation page, choose a Places Provider and set credentials for it."
+msgstr ""
+
+#: src/Admin/Builder.php:199
+msgid "Limit Length option is not compatible with the Address Autocomplete. It will be disabled."
+msgstr ""
+
+#: src/Admin/Entry.php:160
+msgid "N/A"
+msgstr ""
+
+#: src/Admin/Entry.php:181
+msgid "Geolocation Details"
+msgstr ""
+
+#: src/Admin/Entry.php:302
+msgid "Locations Data"
+msgstr ""
+
+#: src/Admin/Settings/GooglePlaces.php:41
+msgid "Google Places"
+msgstr ""
+
+#: src/Admin/Settings/GooglePlaces.php:59
+msgid "API Key"
+msgstr ""
+
+#: src/Admin/Settings/GooglePlaces.php:60
+msgid "Paste your API Key to connect to Google Places."
+msgstr ""
+
+#: src/Admin/Settings/MapboxSearch.php:48
+msgid "Mapbox Search"
+msgstr ""
+
+#: src/Admin/Settings/MapboxSearch.php:66
+msgid "Access Token"
+msgstr ""
+
+#: src/Admin/Settings/MapboxSearch.php:67
+msgid "Paste your Access Token to connect to Mapbox Search."
+msgstr ""
+
+#. translators: %s - link to documentation.
+#: src/Admin/Settings/MapboxSearch.php:103
+msgid "Your Access Token for Mapbox Search is invalid. The Access Token must begin with 'pk.'. Please read more in <a href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">the addon documentation</a>."
+msgstr ""
+
+#: src/Admin/Settings/Preview.php:145
+msgid "Enter a location"
+msgstr ""
+
+#: src/Admin/Settings/Preview.php:158
+msgid "Preview"
+msgstr ""
+
+#: src/Admin/Settings/Settings.php:58
+#: src/Admin/Settings/Settings.php:184
+msgid "Geolocation"
+msgstr ""
+
+#. translators: %s - link to documentation.
+#: src/Admin/Settings/Settings.php:136
+msgid "Heads up: If you're using the WPForms Geolocation addon, please note that Algolia Places shut down on May 31st, 2022. Algolia users need to <a href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">switch to Google Places</a> to continue using form geolocation features."
+msgstr ""
+
+#: src/Admin/Settings/Settings.php:162
+msgid "Save Settings"
+msgstr ""
+
+#. translators: %s - link to documentation.
+#: src/Admin/Settings/Settings.php:187
+msgid "Geolocation provides address autocomplete for Address and Single Text fields so users can submit your forms even faster, with less mistakes. You can even display map previews and enable location auto-detection to further enhance your forms. See our <a href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">Geolocation documentation</a> to learn more."
+msgstr ""
+
+#: src/Admin/Settings/Settings.php:210
+msgid "None"
+msgstr ""
+
+#: src/Admin/Settings/Settings.php:211
+msgid "Select which API should be used for the address autocomplete, autodetect, and show a map for fields functionality."
+msgstr ""
+
+#: src/Admin/Settings/Settings.php:225
+msgid "Current Location"
+msgstr ""
+
+#: src/Admin/Settings/Settings.php:228
+msgid "Detect and pre-fill user's current location on form load, works for both map and inputs."
+msgstr ""
+
+#: src/EntryGeolocation.php:204
+#: src/EntryGeolocation.php:243
+#: src/EntryGeolocation.php:260
+#: src/SmartTags.php:34
+#: src/SmartTags.php:144
+#: src/SmartTags.php:269
+#: src/SmartTags.php:295
+msgid "Entry Geolocation"
+msgstr ""
+
+#: templates/entry/print-item.php:19
+#: templates/metabox/entry-details-location.php:19
+#: templates/metabox/entry-details-location.php:38
+msgid "Location"
+msgstr ""
+
+#: templates/metabox/entry-details-location.php:26
+msgid "Unable to load location data for this entry. This usually means WPForms was unable to process the user's IP address or it is non-standard format."
+msgstr ""
+
+#: templates/metabox/entry-details-location.php:56
+msgid "Zipcode"
+msgstr ""
+
+#: templates/metabox/entry-details-location.php:58
+msgid "Postal"
+msgstr ""
+
+#: templates/metabox/entry-details-location.php:65
+msgid "Country"
+msgstr ""
+
+#: templates/metabox/entry-details-location.php:75
+msgid "Lat/Long"
+msgstr ""

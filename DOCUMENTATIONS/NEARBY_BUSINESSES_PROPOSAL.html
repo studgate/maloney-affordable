@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nearby Businesses Feature Proposal - Responsab LLC</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 0.75in;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .company-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .date {
+            font-size: 14px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        
+        h1 {
+            font-size: 28px;
+            color: #2c3e50;
+            margin: 30px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        
+        h2 {
+            font-size: 22px;
+            color: #34495e;
+            margin: 25px 0 15px 0;
+            padding-top: 15px;
+        }
+        
+        h3 {
+            font-size: 18px;
+            color: #34495e;
+            margin: 20px 0 10px 0;
+        }
+        
+        h4 {
+            font-size: 16px;
+            color: #555;
+            margin: 15px 0 8px 0;
+        }
+        
+        p {
+            margin: 12px 0;
+            text-align: justify;
+        }
+        
+        ul, ol {
+            margin: 12px 0 12px 30px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .executive-summary {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .option-box {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+            background: #fafafa;
+        }
+        
+        .option-recommended {
+            border-color: #27ae60;
+            background: #f0f9f4;
+        }
+        
+        .option-premium {
+            border-color: #e74c3c;
+            background: #fef5f5;
+        }
+        
+        .option-manual {
+            border-color: #f39c12;
+            background: #fef9e7;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .badge-recommended {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .badge-premium {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .badge-warning {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .advantages {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .disadvantages {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .limitations {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        
+        table th {
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        table td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        
+        table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        
+        .checkmark {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .xmark {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        
+        .warning {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        
+        .highlight-box {
+            background: #fff9e6;
+            border: 2px solid #ffc107;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .cost-highlight {
+            font-size: 20px;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        
+        .cost-free {
+            font-size: 20px;
+            font-weight: bold;
+            color: #27ae60;
+        }
+        
+        .recommendation-box {
+            background: #e3f2fd;
+            border: 3px solid #2196f3;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .recommendation-box h3 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+        
+        .next-steps {
+            background: #f5f5f5;
+            border-left: 4px solid #607d8b;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .next-steps ol {
+            margin-left: 25px;
+        }
+        
+        .next-steps li {
+            margin: 10px 0;
+        }
+        
+        hr {
+            border: none;
+            border-top: 2px solid #ecf0f1;
+            margin: 30px 0;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+        
+        @media print {
+            body {
+                padding: 0;
+            }
+            
+            .option-box {
+                page-break-inside: avoid;
+            }
+            
+            h2 {
+                page-break-after: avoid;
+            }
+            
+            table {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-name">Responsab LLC</div>
+        <div class="date">November 2025</div>
+    </div>
+    
+    <h1>Proposal: Nearby Businesses Feature for Listing Pages</h1>
+    
+    <div class="executive-summary">
+        <h2>Executive Summary</h2>
+        <p>This proposal outlines options for displaying nearby businesses (restaurants, cafes, shops) on individual listing pages to enhance user experience and provide valuable neighborhood context. Three approaches are evaluated: <strong>Overpass API (Recommended)</strong>, <strong>Google Places API (Premium)</strong>, and <strong>Google Maps Embed (Manual)</strong>.</p>
+    </div>
+    
+    <hr>
+    
+    <div class="option-box option-recommended">
+        <h2>Option 1: Overpass API Integration <span class="badge badge-recommended">RECOMMENDED</span></h2>
+        
+        <h3>Overview</h3>
+        <p>Automatically fetch and display nearby businesses from OpenStreetMap data using the free Overpass API. Businesses appear as markers on the existing Leaflet map when users view individual listing pages.</p>
+        
+        <h3>What's Needed</h3>
+        
+        <h4>Technical Implementation</h4>
+        <ol>
+            <li><strong>Backend (PHP)</strong>
+                <ul>
+                    <li>New AJAX endpoint: <code>get_nearby_businesses</code></li>
+                    <li>Overpass API query builder</li>
+                    <li>WordPress transient caching (24-48 hour cache per listing)</li>
+                    <li>Error handling and fallback logic</li>
+                </ul>
+            </li>
+            <li><strong>Frontend (JavaScript)</strong>
+                <ul>
+                    <li>Function to fetch businesses when map loads</li>
+                    <li>Marker creation with distinct styling (different from listing marker)</li>
+                    <li>Popup display with business name and type</li>
+                    <li>Optional: Toggle to show/hide businesses</li>
+                    <li>Optional: Filter by business type</li>
+                </ul>
+            </li>
+            <li><strong>UI/UX Enhancements</strong>
+                <ul>
+                    <li>Different marker icon/color for businesses (e.g., blue/gray vs. red/gold for listings)</li>
+                    <li>Map legend explaining marker types</li>
+                    <li>Popup shows: Business name, type (Restaurant, Cafe, Shop), distance</li>
+                    <li>Limit display to 15-20 closest businesses</li>
+                    <li>Optional: Walking distance calculation</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h4>Development Effort</h4>
+        <ul>
+            <li><strong>Backend Development</strong>: 3-4 hours
+                <ul>
+                    <li>AJAX endpoint creation</li>
+                    <li>Overpass query builder</li>
+                    <li>Caching implementation</li>
+                    <li>Error handling</li>
+                </ul>
+            </li>
+            <li><strong>Frontend Development</strong>: 2-3 hours
+                <ul>
+                    <li>JavaScript integration</li>
+                    <li>Marker styling and display</li>
+                    <li>Popup creation</li>
+                    <li>Map integration</li>
+                </ul>
+            </li>
+            <li><strong>Testing & Refinement</strong>: 1-2 hours
+                <ul>
+                    <li>Testing in various locations</li>
+                    <li>Performance optimization</li>
+                    <li>Edge case handling</li>
+                </ul>
+            </li>
+        </ul>
+        <p><strong>Total Estimated Time: 6-9 hours</strong></p>
+        
+        <h3>Costs</h3>
+        <ul>
+            <li><strong>API Costs</strong>: <span class="cost-free">$0 (completely free)</span></li>
+            <li><strong>Hosting Impact</strong>: Minimal (cached results, low server load)</li>
+            <li><strong>Maintenance</strong>: Low (automated, no manual updates needed)</li>
+        </ul>
+        
+        <h3>Why It's Worth It</h3>
+        
+        <div class="advantages">
+            <h4>✅ Advantages</h4>
+            <ol>
+                <li><strong>Zero Cost</strong>: No API fees, no subscription costs</li>
+                <li><strong>Fully Automated</strong>: Businesses update automatically as OSM data improves</li>
+                <li><strong>No Manual Work</strong>: No need for staff to manually add businesses</li>
+                <li><strong>Scalable</strong>: Works for all listings automatically</li>
+                <li><strong>Privacy-Friendly</strong>: No tracking, no external dependencies</li>
+                <li><strong>Fast Performance</strong>: Cached results load instantly</li>
+                <li><strong>Comprehensive Coverage</strong>: Includes restaurants, cafes, shops, banks, pharmacies, etc.</li>
+                <li><strong>Consistent Experience</strong>: Same feature works for every listing</li>
+                <li><strong>Future-Proof</strong>: OSM data continues to improve over time</li>
+                <li><strong>Easy Maintenance</strong>: Set it and forget it</li>
+            </ol>
+        </div>
+        
+        <div class="limitations">
+            <h4>⚠️ Limitations</h4>
+            <ol>
+                <li><strong>Data Quality Varies</strong>: Some areas may have incomplete data (urban areas typically better)</li>
+                <li><strong>No Ratings/Reviews</strong>: Only basic info (name, type, location)</li>
+                <li><strong>No Photos</strong>: Just markers and text</li>
+                <li><strong>Occasional Missing Businesses</strong>: Not every business is in OSM</li>
+            </ol>
+        </div>
+        
+        <h3>Business Value</h3>
+        <ul>
+            <li><strong>Enhanced User Experience</strong>: Users can see neighborhood amenities at a glance</li>
+            <li><strong>Competitive Advantage</strong>: Most listing sites don't show nearby businesses automatically</li>
+            <li><strong>Increased Engagement</strong>: More interactive maps keep users on page longer</li>
+            <li><strong>Better Decision Making</strong>: Helps users evaluate neighborhood livability</li>
+            <li><strong>SEO Benefits</strong>: More content and interactivity on listing pages</li>
+        </ul>
+    </div>
+    
+    <hr>
+    
+    <div class="option-box option-premium">
+        <h2>Option 2: Google Places API Integration <span class="badge badge-premium">PREMIUM</span></h2>
+        
+        <h3>Overview</h3>
+        <p>Use Google Places API to fetch nearby businesses with richer data (though you mentioned you don't need ratings/reviews/images, so this may be overkill).</p>
+        
+        <h3>What's Needed</h3>
+        
+        <h4>Technical Implementation</h4>
+        <ol>
+            <li><strong>Backend (PHP)</strong>
+                <ul>
+                    <li>Google Places API key setup</li>
+                    <li>Server-side proxy endpoint (to hide API key)</li>
+                    <li>Nearby Search API integration</li>
+                    <li>Aggressive caching (24-48 hours)</li>
+                    <li>Error handling and quota management</li>
+                </ul>
+            </li>
+            <li><strong>Frontend (JavaScript)</strong>
+                <ul>
+                    <li>Similar to Option 1, but fetching from your proxy endpoint</li>
+                    <li>Marker display on Leaflet map</li>
+                </ul>
+            </li>
+            <li><strong>Configuration</strong>
+                <ul>
+                    <li>Google Cloud account setup</li>
+                    <li>API key generation</li>
+                    <li>Billing account configuration</li>
+                    <li>Usage monitoring</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h4>Development Effort</h4>
+        <ul>
+            <li><strong>Backend Development</strong>: 4-5 hours</li>
+            <li><strong>Frontend Development</strong>: 2-3 hours</li>
+            <li><strong>Testing & Configuration</strong>: 2-3 hours</li>
+        </ul>
+        <p><strong>Total Estimated Time: 8-11 hours</strong></p>
+        
+        <h3>Costs</h3>
+        <ul>
+            <li><strong>API Costs</strong>: ~$17 per 1,000 requests</li>
+            <li><strong>Estimated Monthly Cost</strong>:
+                <ul>
+                    <li>100 listing pages/day × 15 businesses = 1,500 requests/day</li>
+                    <li>1,500 × 30 days = 45,000 requests/month</li>
+                    <li><strong class="cost-highlight">Cost: ~$765/month (or $9,180/year)</strong></li>
+                </ul>
+            </li>
+            <li><strong>Hosting Impact</strong>: Minimal (cached results)</li>
+        </ul>
+        
+        <h3>Why It's Worth It (or Not)</h3>
+        
+        <div class="advantages">
+            <h4>✅ Advantages</h4>
+            <ol>
+                <li><strong>Excellent Data Quality</strong>: Google has the most comprehensive business database</li>
+                <li><strong>Very Accurate</strong>: Up-to-date business information</li>
+                <li><strong>Rich Data Available</strong>: Ratings, reviews, photos (though you don't need them)</li>
+                <li><strong>Global Coverage</strong>: Works everywhere Google Maps works</li>
+            </ol>
+        </div>
+        
+        <div class="disadvantages">
+            <h4>❌ Disadvantages</h4>
+            <ol>
+                <li><strong>High Cost</strong>: ~$765/month for moderate traffic</li>
+                <li><strong>Overkill for Your Needs</strong>: You don't need ratings/reviews/images</li>
+                <li><strong>Ongoing Expense</strong>: Monthly recurring cost</li>
+                <li><strong>API Key Management</strong>: Security considerations</li>
+                <li><strong>Quota Limits</strong>: Need to monitor usage</li>
+                <li><strong>Not Worth It</strong>: Since you don't need the premium features, the cost isn't justified</li>
+            </ol>
+        </div>
+        
+        <div class="recommendation-box">
+            <h3>Recommendation</h3>
+            <p><strong>NOT RECOMMENDED</strong> - The cost is too high for basic business display when Overpass API provides the same core functionality for free.</p>
+        </div>
+    </div>
+    
+    <hr>
+    
+    <div class="option-box option-manual">
+        <h2>Option 3: Google Maps Embed (Manual) <span class="badge badge-warning">⚠️</span></h2>
+        
+        <h3>Overview</h3>
+        <p>Add a custom field to listings where staff manually paste Google Maps embed code. The embed would replace or be integrated with the existing map display on individual listing pages (not a second separate map).</p>
+        
+        <h3>What's Needed</h3>
+        
+        <h4>Technical Implementation</h4>
+        <ol>
+            <li><strong>Backend (PHP)</strong>
+                <ul>
+                    <li>Add custom field: <code>wpcf-google-maps-embed</code> or <code>_listing_google_maps_embed</code></li>
+                    <li>Display field in admin edit screen</li>
+                    <li>Output embed code in Toolset template (with proper sanitization)</li>
+                </ul>
+            </li>
+            <li><strong>Frontend</strong>
+                <ul>
+                    <li>Display embed code in template (WordPress handles iframe rendering)</li>
+                    <li>Optional: Styling for embed container</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h4>Development Effort</h4>
+        <ul>
+            <li><strong>Backend Development</strong>: 2 hours</li>
+            <li><strong>Testing</strong>: 1 hour</li>
+            <li><strong>Template Implementation</strong>: 1 hour</li>
+        </ul>
+        <p><strong>Total Estimated Time: 4 hours</strong></p>
+        
+        <h3>Costs</h3>
+        <ul>
+            <li><strong>Development</strong>: One-time, minimal</li>
+            <li><strong>Ongoing</strong>: Staff time to manually add embeds for each listing</li>
+            <li><strong>Google Maps Embed</strong>: Free (no API key needed for basic embeds)</li>
+        </ul>
+        
+        <h3>Detailed Feedback on This Scenario</h3>
+        
+        <div class="disadvantages">
+            <h4>❌ Major Disadvantages</h4>
+            <ol>
+                <li><strong>Manual Work Required</strong>
+                    <ul>
+                        <li>Staff must manually search Google Maps for each listing address</li>
+                        <li>Copy embed code</li>
+                        <li>Paste into field</li>
+                        <li>Time-consuming: ~5-10 minutes per listing</li>
+                        <li>For 200 listings = 16-33 hours of manual work</li>
+                        <li>New listings require manual setup</li>
+                    </ul>
+                </li>
+                <li><strong>No Automation</strong>
+                    <ul>
+                        <li>Doesn't scale</li>
+                        <li>Human error risk (wrong address, wrong embed)</li>
+                        <li>Inconsistent implementation</li>
+                        <li>Maintenance burden</li>
+                    </ul>
+                </li>
+                <li><strong>Maintenance Issues</strong>
+                    <ul>
+                        <li>If address changes, embed needs updating</li>
+                        <li>If Google changes embed format, all embeds may break</li>
+                        <li>No way to bulk update</li>
+                        <li>Ongoing manual maintenance</li>
+                    </ul>
+                </li>
+                <li><strong>Inconsistent Data</strong>
+                    <ul>
+                        <li>Some listings may have embeds, others won't</li>
+                        <li>Depends on staff remembering to add them</li>
+                        <li>Incomplete feature implementation</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+        
+        <div class="advantages">
+            <h4>✅ Potential Advantages</h4>
+            <ol>
+                <li><strong>Quick to Implement</strong>: Very fast development time</li>
+                <li><strong>No API Costs</strong>: Google embeds are free</li>
+                <li><strong>Familiar Interface</strong>: Staff may already know how to use Google Maps</li>
+                <li><strong>Google's Business Data</strong>: Shows Google's business markers automatically</li>
+            </ol>
+        </div>
+        
+        <div class="recommendation-box">
+            <h3>Recommendation</h3>
+            <p><strong>Not Preferred, But Doable</strong> - This is the quickest option to implement (4 hours) and works functionally. However, it requires ongoing manual work from staff and doesn't scale as well as automated solutions. If speed of implementation is the priority and manual data entry is acceptable, this option can work.</p>
+        </div>
+    </div>
+    
+    <hr>
+    
+    <h2>Comparison Matrix</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Feature</th>
+                <th>Overpass API (Option 1)</th>
+                <th>Google Places (Option 2)</th>
+                <th>Google Embed (Option 3)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Cost</strong></td>
+                <td class="cost-free">$0/month</td>
+                <td class="cost-highlight">~$765/month</td>
+                <td class="cost-free">$0/month</td>
+            </tr>
+            <tr>
+                <td><strong>Development Time</strong></td>
+                <td>6-9 hours</td>
+                <td>8-11 hours</td>
+                <td>4 hours</td>
+            </tr>
+            <tr>
+                <td><strong>Automation</strong></td>
+                <td><span class="checkmark">✅ Fully automated</span></td>
+                <td><span class="checkmark">✅ Fully automated</span></td>
+                <td><span class="xmark">❌ Manual work required</span></td>
+            </tr>
+            <tr>
+                <td><strong>Scalability</strong></td>
+                <td><span class="checkmark">✅ Unlimited</span></td>
+                <td><span class="checkmark">✅ Unlimited</span></td>
+                <td><span class="xmark">❌ Doesn't scale</span></td>
+            </tr>
+            <tr>
+                <td><strong>Maintenance</strong></td>
+                <td><span class="checkmark">✅ Minimal</span></td>
+                <td><span class="warning">⚠️ Monitor usage</span></td>
+                <td><span class="xmark">❌ Ongoing manual work</span></td>
+            </tr>
+            <tr>
+                <td><strong>Data Quality</strong></td>
+                <td><span class="warning">⚠️ Varies by area</span></td>
+                <td><span class="checkmark">✅ Excellent</span></td>
+                <td><span class="warning">⚠️ Depends on Google</span></td>
+            </tr>
+            <tr>
+                <td><strong>User Experience</strong></td>
+                <td><span class="checkmark">✅ Integrated, clean</span></td>
+                <td><span class="checkmark">✅ Integrated, clean</span></td>
+                <td><span class="warning">⚠️ Google Maps interface</span></td>
+            </tr>
+            <tr>
+                <td><strong>Business Highlighting</strong></td>
+                <td><span class="checkmark">✅ Custom markers</span></td>
+                <td><span class="checkmark">✅ Custom markers</span></td>
+                <td><span class="xmark">❌ General map view</span></td>
+            </tr>
+            <tr>
+                <td><strong>Customization</strong></td>
+                <td><span class="checkmark">✅ Full control</span></td>
+                <td><span class="checkmark">✅ Full control</span></td>
+                <td><span class="xmark">❌ Limited</span></td>
+            </tr>
+            <tr>
+                <td><strong>Setup Per Listing</strong></td>
+                <td><span class="checkmark">✅ Automatic</span></td>
+                <td><span class="checkmark">✅ Automatic</span></td>
+                <td><span class="xmark">❌ 5-10 min manual work</span></td>
+            </tr>
+            <tr>
+                <td><strong>Future-Proof</strong></td>
+                <td><span class="checkmark">✅ Yes</span></td>
+                <td><span class="checkmark">✅ Yes</span></td>
+                <td><span class="warning">⚠️ Depends on Google</span></td>
+            </tr>
+            <tr>
+                <td><strong>Implementation Cost</strong></td>
+                <td>6-9 hours (one-time)</td>
+                <td>8-11 hours (one-time)</td>
+                <td>4 hours (one-time)</td>
+            </tr>
+            <tr>
+                <td><strong>Ongoing Cost</strong></td>
+                <td class="cost-free">$0/month</td>
+                <td class="cost-highlight">~$765/month</td>
+                <td>$0/month + staff time</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <hr>
+    
+    <div class="recommendation-box">
+        <h2>Final Recommendation</h2>
+        
+        <h3>Primary Recommendation: <strong>Option 1 - Overpass API</strong></h3>
+        
+        <h4>Why:</h4>
+        <ol>
+            <li><strong>Best Value</strong>: Free, automated, scalable</li>
+            <li><strong>Meets Your Needs</strong>: You don't need ratings/reviews/images, so basic business info is sufficient</li>
+            <li><strong>Low Maintenance</strong>: Set it and forget it</li>
+            <li><strong>Professional</strong>: Integrated into existing map, clean UX</li>
+            <li><strong>Future-Proof</strong>: OSM data improves over time</li>
+        </ol>
+        
+        <h4>Implementation Priority:</h4>
+        <ul>
+            <li><strong>Phase 1</strong>: Core functionality (6-9 hours)
+                <ul>
+                    <li>Backend endpoint</li>
+                    <li>Basic business markers</li>
+                    <li>Popups with name/type</li>
+                </ul>
+            </li>
+            <li><strong>Phase 2</strong> (Optional, if needed):
+                <ul>
+                    <li>Business type filtering</li>
+                    <li>Distance display</li>
+                    <li>Toggle show/hide</li>
+                    <li>Marker clustering for dense areas</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <h4>Alternative Consideration: Option 2 - Google Places API</h4>
+        <p><strong>Only if:</strong></p>
+        <ul>
+            <li>Budget allows ~$765/month</li>
+            <li>You later decide you want ratings/reviews</li>
+            <li>Data quality in your area is critical</li>
+            <li>Overpass API data quality is insufficient</li>
+        </ul>
+        <p><strong>Recommendation</strong>: Start with Overpass API, upgrade to Google Places only if data quality proves insufficient.</p>
+        
+        <h4>Alternative Option: Option 3 - Google Maps Embed</h4>
+        <p><strong>Consider if:</strong></p>
+        <ul>
+            <li>Speed of implementation is critical (4 hours vs 6-9 hours)</li>
+            <li>Manual data entry by staff is acceptable</li>
+            <li>You prefer Google's business data display</li>
+        </ul>
+        <p><strong>Trade-offs:</strong> Requires ongoing manual work and doesn't scale as well as automated solutions, but is the quickest to implement.</p>
+    </div>
+    
+    <hr>
+    
+    <div class="next-steps">
+        <h2>Next Steps</h2>
+        <p>If you approve Option 1 (Overpass API):</p>
+        <ol>
+            <li><strong>Development Phase</strong> (6-9 hours)
+                <ul>
+                    <li>Create PHP AJAX endpoint</li>
+                    <li>Implement Overpass API queries</li>
+                    <li>Add caching layer</li>
+                    <li>Build frontend JavaScript</li>
+                    <li>Integrate with existing Leaflet maps</li>
+                    <li>Test in various locations</li>
+                </ul>
+            </li>
+            <li><strong>Testing Phase</strong> (1-2 hours)
+                <ul>
+                    <li>Test with multiple listings</li>
+                    <li>Verify data quality in target areas</li>
+                    <li>Performance testing</li>
+                    <li>Edge case handling</li>
+                </ul>
+            </li>
+            <li><strong>Deployment</strong>
+                <ul>
+                    <li>Deploy to staging</li>
+                    <li>Final testing</li>
+                    <li>Production deployment</li>
+                    <li>Monitor for issues</li>
+                </ul>
+            </li>
+        </ol>
+        <p><strong>Total Timeline: 1-2 days of development work</strong></p>
+    </div>
+    
+    <hr>
+    
+    <h2>Questions to Consider</h2>
+    <ol>
+        <li><strong>Search Radius</strong>: How far should we search for businesses? (Recommended: 500-1000 meters)</li>
+        <li><strong>Business Types</strong>: Which types are most important? (Restaurants, cafes, shops, all?)</li>
+        <li><strong>Display Limit</strong>: How many businesses to show? (Recommended: 15-20)</li>
+        <li><strong>Marker Styling</strong>: What color/style for business markers? (Different from listing markers)</li>
+        <li><strong>Optional Features</strong>: Do you want distance display, filtering, or toggle?</li>
+    </ol>
+    
+    <hr>
+    
+    <h2>Conclusion</h2>
+    <p><strong>Option 1 (Overpass API)</strong> provides the best balance of cost, functionality, and maintenance. <strong>Implementation cost:</strong> 6-9 hours (one-time development). <strong>Ongoing cost:</strong> $0/month. It's free, automated, scalable, and provides a professional user experience. The development investment pays off with zero ongoing costs and minimal maintenance.</p>
+    
+    <p><strong>Option 2 (Google Places)</strong> is overkill for your needs and too expensive when you don't require premium features. <strong>Implementation cost:</strong> 8-11 hours (one-time development). <strong>Ongoing cost:</strong> ~$765/month (~$9,180/year). The high monthly recurring cost makes this option cost-prohibitive for basic business display needs.</p>
+    
+    <p><strong>Option 3 (Google Embed)</strong> is the quickest to implement and works functionally, but requires ongoing manual work from staff. <strong>Implementation cost:</strong> 4 hours (one-time development). <strong>Ongoing cost:</strong> $0/month for API, but requires staff time (~5-10 minutes per listing for manual data entry). It's a viable option if speed of implementation is the priority and manual data entry is acceptable.</p>
+    
+    <div class="highlight-box">
+        <h3 style="margin-top: 0;">Recommendation: Proceed with Option 1 - Overpass API Integration</h3>
+    </div>
+    
+    <div class="footer">
+        <p>Responsab LLC | November 2025</p>
+        <p>Proposal: Nearby Businesses Feature for Listing Pages</p>
+    </div>
+</body>
+</html>
+

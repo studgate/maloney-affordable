@@ -1,0 +1,87 @@
+/**
+ * Content.
+ */
+
+.wpe-update-source-selector-body {
+	max-width: 800px;
+	margin: 0 auto;
+
+	h2 {
+		line-height: 1.4;
+	}
+
+	h3 {
+		padding: 0;
+		font-weight: 400;
+	}
+
+	.wpe-update-source-selector-source-settings-wrapper {
+		display: flex;
+		flex-direction: column;
+
+		&.disabled {
+			color: var(--wpe-update-source-selector-color-disabled-text);
+		}
+
+		.wpe-update-source-selector-settings-section {
+			display: flex;
+			flex-direction: row;
+			margin-top: 2.5rem;
+
+			// Specificity needed due to display flex above.
+			&.hidden {
+				display: none;
+			}
+
+			.wpe-update-source-selector-setting-title {
+				font-weight: 700;
+				flex: 0 0 22.5%;
+			}
+
+			.wpe-update-source-selector-setting-options {
+				display: flex;
+				flex-direction: column;
+				gap: 1rem;
+
+				.wpe-update-source-selector-setting-option {
+					display: flex;
+					flex-flow: row nowrap;
+					gap: 0.5rem;
+
+					input {
+						margin: 0;
+					}
+
+					label {
+						display: inline-block;
+						vertical-align: text-top;
+						line-height: normal;
+
+						span {
+							display: inline-block;
+
+							&.option-title {
+								font-weight: 510;
+							}
+
+							&.option-detail {
+								margin-top: 0.5rem;
+								font-weight: 400;
+							}
+						}
+
+						code {
+							display: inline-block;
+
+							&.option-detail {
+								margin-top: 0.25rem;
+								margin-bottom: 0;
+								font-weight: 400;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

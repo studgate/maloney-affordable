@@ -1,0 +1,110 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: WPForms User Journey 1.4.0\n"
+"Report-Msgid-Bugs-To: https://wpforms.com/support/\n"
+"Last-Translator: WPForms <support@wpforms.com>\n"
+"Language-Team: WPForms <support@wpforms.com>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2024-12-02T17:29:02+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.7.1\n"
+"X-Domain: wpforms-user-journey\n"
+
+#. Plugin Name of the plugin
+msgid "WPForms User Journey"
+msgstr ""
+
+#. Plugin URI of the plugin
+#. Author URI of the plugin
+msgid "https://wpforms.com"
+msgstr ""
+
+#. Description of the plugin
+msgid "User Journey addon for WPForms."
+msgstr ""
+
+#. Author of the plugin
+msgid "WPForms"
+msgstr ""
+
+#. translators: %d - form id.
+#: src/Admin/Entries.php:109
+#: src/View.php:46
+#: src/View.php:205
+msgid "Form (#%d)"
+msgstr ""
+
+#: src/Admin/Export.php:49
+msgid "User Journey information"
+msgstr ""
+
+#: src/Process.php:161
+msgid "Referrer"
+msgstr ""
+
+#: src/SmartTags.php:79
+#: src/SmartTags.php:147
+#: src/SmartTags.php:183
+#: src/SmartTags.php:276
+#: src/SmartTags.php:298
+msgid "Entry User Journey"
+msgstr ""
+
+#. translators: %1$s - number of steps; %2$s - total time spent.
+#: src/View.php:157
+#: src/View.php:222
+msgid "User took %1$s over %2$s"
+msgstr ""
+
+#. translators: Total number of steps taken.
+#: src/View.php:160
+#: src/View.php:225
+msgid "%s step"
+msgid_plural "%s steps"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/View.php:174
+msgid "abandoned"
+msgstr ""
+
+#: src/View.php:174
+#: src/View.php:236
+msgid "submitted"
+msgstr ""
+
+#: src/View.php:266
+msgid "No title"
+msgstr ""
+
+#: templates/confirmation/journal-record.php:34
+#: templates/email/journal-record.php:43
+#: templates/entries/journal-record.php:40
+msgid "Search Results"
+msgstr ""
+
+#: templates/confirmation/journal-record.php:36
+#: templates/email/journal-record.php:45
+#: templates/entries/journal-record.php:42
+msgid "Homepage"
+msgstr ""
+
+#: templates/confirmation/journal-record.php:42
+#: templates/email/journal-record.php:51
+#: templates/entries/journal-record.php:48
+msgid "Go to URL"
+msgstr ""
+
+#: templates/entries/journal-record.php:54
+msgid "Toggle URL parameter display"
+msgstr ""
+
+#: templates/entries/metabox.php:21
+msgid "User Journey"
+msgstr ""
+
+#: templates/entries/metabox.php:30
+msgid "There's no user journey for this entry."
+msgstr ""

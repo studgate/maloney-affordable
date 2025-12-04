@@ -1,0 +1,165 @@
+@import url("https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap");
+
+@page {
+  size: Letter;
+  margin: 0.65in 0.75in;
+}
+
+body {
+  font-family: "Work Sans", "Helvetica Neue", Arial, sans-serif;
+  color: #1c1f26;
+  line-height: 1.55;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0.5in 0 0.4in;
+  font-size: 11.5pt;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 700;
+  color: #0f3d5c;
+  margin-bottom: 0.2em;
+}
+
+h1 {
+  font-size: 26pt;
+  letter-spacing: -0.02em;
+  border-bottom: 3px solid #0f3d5c;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+h2 {
+  font-size: 18pt;
+  margin-top: 1.2em;
+}
+
+h3 {
+  font-size: 13.5pt;
+  margin-top: 1em;
+}
+
+p {
+  margin: 0.25em 0 0.7em;
+}
+
+strong {
+  color: #0f3d5c;
+}
+
+em {
+  color: #4d5666;
+}
+
+a {
+  color: #0f3d5c;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+ul,
+ol {
+  padding-left: 1.1em;
+  margin: 0.25em 0 0.75em;
+}
+
+li {
+  margin: 0.15em 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.4em 0 1em;
+  font-size: 10.5pt;
+}
+
+th,
+td {
+  border: 1px solid #d7dde6;
+  padding: 8px 10px;
+}
+
+th {
+  background: #0f3d5c;
+  color: #fff;
+  text-align: left;
+}
+
+tr:nth-child(even) td {
+  background: #f4f6fa;
+}
+
+code {
+  font-family: "Space Mono", Consolas, monospace;
+  background: #f4f6fa;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #0f3d5c;
+}
+
+hr {
+  border: none;
+  border-top: 1.5px solid #d7dde6;
+  margin: 16px 0 18px;
+}
+
+blockquote {
+  margin: 0.6em 0;
+  padding: 10px 14px;
+  border-left: 4px solid #0f3d5c;
+  background: #f4f6fa;
+  color: #1c1f26;
+}
+
+.callout {
+  background: #fef6e8;
+  border: 1px solid #f0d28c;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0.4em 0 0.9em;
+  color: #7a5300;
+  font-weight: 600;
+}
+
+.toc li {
+  margin: 0.1em 0;
+}
+
+.meta {
+  font-size: 10pt;
+  color: #4d5666;
+  margin-top: 2em;
+  border-top: 1px solid #d7dde6;
+  padding-top: 10px;
+}
+
+.checklist {
+  list-style: none;
+  padding-left: 0;
+}
+
+.checklist li::before {
+  content: "☐ ";
+  color: #0f3d5c;
+  font-weight: 700;
+}
+
+.accent {
+  color: #0f3d5c;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  a {
+    color: #0f3d5c;
+  }
+}

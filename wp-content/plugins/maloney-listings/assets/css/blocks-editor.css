@@ -1,0 +1,15 @@
+.maloney-available-units-block-editor {
+    padding: 20px;
+    border: 1px dashed #ccc;
+    background: #f9f9f9;
+}
+
+.maloney-available-units-preview h3 {
+    margin: 0 0 10px 0;
+    font-size: 20px;
+}
+
+.maloney-available-units-preview p {
+    margin: 0;
+}
+

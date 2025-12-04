@@ -1,0 +1,22 @@
+/**
+ * Colors.
+ */
+
+:root {
+	// Status check.
+	--wpe-update-source-selector-color-source-status-checking: #87898c;
+	--wpe-update-source-selector-color-source-status-error: #d63638;
+	--wpe-update-source-selector-color-source-status-success: #00a32a;
+
+	// Header.
+	--wpe-update-source-selector-color-header-background: #fff;
+	--wpe-update-source-selector-color-header-border: #dcdcde;
+
+	// Tabs.
+	--wpe-update-source-selector-color-tab-highlight: #3582c4;
+	--wpe-update-source-selector-color-tab-focus: #1d2327;
+	--wpe-update-source-selector-color-tab-focus-outline: #787c82;
+
+	// Settings.
+	--wpe-update-source-selector-color-disabled-text: #87898c;
+}

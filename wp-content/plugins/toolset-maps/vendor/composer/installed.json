@@ -1,0 +1,360 @@
+{
+    "packages": [
+        {
+            "name": "composer/installers",
+            "version": "1.x-dev",
+            "version_normalized": "1.9999999.9999999.9999999-dev",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/composer/installers.git",
+                "reference": "894a0b5c5d34c88b69b097f2aae1439730fa6836"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/composer/installers/zipball/894a0b5c5d34c88b69b097f2aae1439730fa6836",
+                "reference": "894a0b5c5d34c88b69b097f2aae1439730fa6836",
+                "shasum": ""
+            },
+            "require": {
+                "composer-plugin-api": "^1.0 || ^2.0"
+            },
+            "replace": {
+                "roundcube/plugin-installer": "*",
+                "shama/baton": "*"
+            },
+            "require-dev": {
+                "composer/composer": "1.6.* || ^2.0",
+                "composer/semver": "^1 || ^3",
+                "phpstan/phpstan": "^0.12.55",
+                "phpstan/phpstan-phpunit": "^0.12.16",
+                "symfony/phpunit-bridge": "^4.2 || ^5",
+                "symfony/process": "^2.3"
+            },
+            "time": "2022-03-15T21:23:54+00:00",
+            "type": "composer-plugin",
+            "extra": {
+                "class": "Composer\\Installers\\Plugin",
+                "branch-alias": {
+                    "dev-main": "1.x-dev"
+                },
+                "plugin-modifies-install-path": true
+            },
+            "installation-source": "dist",
+            "autoload": {
+                "psr-4": {
+                    "Composer\\Installers\\": "src/Composer/Installers"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Kyle Robinson Young",
+                    "email": "kyle@dontkry.com",
+                    "homepage": "https://github.com/shama"
+                }
+            ],
+            "description": "A multi-framework Composer library installer",
+            "homepage": "https://composer.github.io/installers/",
+            "keywords": [
+                "Craft",
+                "Dolibarr",
+                "Eliasis",
+                "Hurad",
+                "ImageCMS",
+                "Kanboard",
+                "Lan Management System",
+                "MODX Evo",
+                "MantisBT",
+                "Mautic",
+                "Maya",
+                "OXID",
+                "Plentymarkets",
+                "Porto",
+                "RadPHP",
+                "SMF",
+                "Starbug",
+                "Thelia",
+                "Whmcs",
+                "WolfCMS",
+                "agl",
+                "aimeos",
+                "annotatecms",
+                "attogram",
+                "bitrix",
+                "cakephp",
+                "chef",
+                "cockpit",
+                "codeigniter",
+                "concrete5",
+                "croogo",
+                "dokuwiki",
+                "drupal",
+                "eZ Platform",
+                "elgg",
+                "expressionengine",
+                "fuelphp",
+                "grav",
+                "installer",
+                "itop",
+                "joomla",
+                "known",
+                "kohana",
+                "laravel",
+                "lavalite",
+                "lithium",
+                "magento",
+                "majima",
+                "mako",
+                "mediawiki",
+                "miaoxing",
+                "modulework",
+                "modx",
+                "moodle",
+                "osclass",
+                "pantheon",
+                "phpbb",
+                "piwik",
+                "ppi",
+                "processwire",
+                "puppet",
+                "pxcms",
+                "reindex",
+                "roundcube",
+                "shopware",
+                "silverstripe",
+                "sydes",
+                "sylius",
+                "symfony",
+                "tastyigniter",
+                "typo3",
+                "wordpress",
+                "yawik",
+                "zend",
+                "zikula"
+            ],
+            "support": {
+                "issues": "https://github.com/composer/installers/issues",
+                "source": "https://github.com/composer/installers/tree/1.x"
+            },
+            "funding": [
+                {
+                    "url": "https://packagist.com",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/composer",
+                    "type": "github"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/composer/composer",
+                    "type": "tidelift"
+                }
+            ],
+            "install-path": "./installers"
+        },
+        {
+            "name": "rdlowrey/auryn",
+            "version": "v1.4.4",
+            "version_normalized": "1.4.4.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/rdlowrey/auryn.git",
+                "reference": "dae57592229d313b59414a2c8334e61e6eb00928"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/rdlowrey/auryn/zipball/dae57592229d313b59414a2c8334e61e6eb00928",
+                "reference": "dae57592229d313b59414a2c8334e61e6eb00928",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "require-dev": {
+                "athletic/athletic": "~0.1",
+                "fabpot/php-cs-fixer": "~1.9",
+                "phpunit/phpunit": "^4.8"
+            },
+            "time": "2021-03-04T20:26:52+00:00",
+            "type": "library",
+            "installation-source": "dist",
+            "autoload": {
+                "psr-4": {
+                    "Auryn\\": "lib/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Daniel Lowrey",
+                    "email": "rdlowrey@gmail.com",
+                    "homepage": "https://github.com/rdlowrey",
+                    "role": "Creator / Main Developer"
+                },
+                {
+                    "name": "Levi Morrison",
+                    "email": "levim@php.net",
+                    "homepage": "http://morrisonlevi.github.com/",
+                    "role": "Developer"
+                },
+                {
+                    "name": "Dan Ackroyd",
+                    "email": "Danack@basereality.com",
+                    "homepage": "http://www.basereality.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Auryn is a dependency injector for bootstrapping object-oriented PHP applications.",
+            "homepage": "https://github.com/rdlowrey/auryn",
+            "keywords": [
+                "dependency injection",
+                "dic",
+                "ioc"
+            ],
+            "support": {
+                "issues": "https://github.com/rdlowrey/auryn/issues",
+                "source": "https://github.com/rdlowrey/auryn/tree/v1.4.4"
+            },
+            "install-path": "../rdlowrey/auryn"
+        },
+        {
+            "name": "toolset/common-es",
+            "version": "1.7.5",
+            "version_normalized": "1.7.5.0",
+            "source": {
+                "type": "git",
+                "url": "ssh://git@git.onthegosystems.com:10022/toolset/toolset-common-es.git",
+                "reference": "fe33c0b91c837659c10612e954523f2c9a4d7aa6"
+            },
+            "require-dev": {
+                "dealerdirect/phpcodesniffer-composer-installer": "^0.7",
+                "otgs/toolset-coding-standards": "dev-master",
+                "otgs/unit-tests-framework": "~1.2.7",
+                "phpcompatibility/php-compatibility": "9.3.5",
+                "phpcompatibility/phpcompatibility-wp": "2.1.3",
+                "phpstan/extension-installer": "1.2.x-dev",
+                "phpstan/phpstan": "1.10.x-dev",
+                "sebastian/phpcpd": "^3.0",
+                "szepeviktor/phpstan-wordpress": "dev-master"
+            },
+            "time": "2025-03-31T09:07:42+00:00",
+            "type": "library",
+            "installation-source": "source",
+            "autoload": {
+                "psr-4": {
+                    "ToolsetCommonEs\\": "server/"
+                }
+            },
+            "scripts": {
+                "sniffer:php56": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 5.6- --ignore=*/vendor/*,*/tests/*,*/__test__/* --extensions=php"
+                ],
+                "sniffer:php74": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 7.4 --ignore=*/vendor/*,*/tests/*,*/__test__/* --extensions=php"
+                ],
+                "sniffer:php80": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 8.0 --ignore=*/vendor/*,*/tests/*,*/__test__/* --extensions=php"
+                ],
+                "sniffer:php81": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 8.1 --ignore=*/vendor/*,*/tests/*,*/__test__/* --extensions=php"
+                ],
+                "sniffer:php82": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 8.2 --ignore=*/vendor/*,*/tests/*,*/__test__/* --extensions=php"
+                ]
+            },
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "OnTheGoSystems"
+                }
+            ],
+            "description": "Toolset Common for ECMAScript.",
+            "install-path": "../toolset/common-es"
+        },
+        {
+            "name": "toolset/dynamic-sources",
+            "version": "2.5.8",
+            "version_normalized": "2.5.8.0",
+            "source": {
+                "type": "git",
+                "url": "ssh://git@git.onthegosystems.com:10022/toolset/dynamic-sources.git",
+                "reference": "71d9b32134d114cb393ac1883854877b1f49bf6d"
+            },
+            "require": {
+                "php": ">=5.6.0",
+                "rdlowrey/auryn": "^1.4"
+            },
+            "require-dev": {
+                "dealerdirect/phpcodesniffer-composer-installer": "^0.7",
+                "otgs/toolset-coding-standards": "dev-master",
+                "otgs/unit-tests-framework": "~1.2.7",
+                "phpcompatibility/php-compatibility": "9.3.5",
+                "phpcompatibility/phpcompatibility-wp": "2.1.3",
+                "phpstan/extension-installer": "1.2.x-dev",
+                "phpstan/phpstan": "1.10.x-dev",
+                "roave/security-advisories": "dev-master",
+                "sebastian/phpcpd": "^3.0",
+                "szepeviktor/phpstan-wordpress": "dev-master"
+            },
+            "time": "2025-09-23T08:03:14+00:00",
+            "type": "library",
+            "installation-source": "source",
+            "autoload": {
+                "exclude-from-classmap": [
+                    "/server/"
+                ],
+                "psr-4": {
+                    "Toolset\\DynamicSources\\": "server/"
+                }
+            },
+            "autoload-dev": {
+                "classmap": [
+                    "tests/stubs"
+                ]
+            },
+            "scripts": {
+                "sniffer:php56": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 5.6- --ignore=*/vendor/* --extensions=php"
+                ],
+                "sniffer:php74": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 7.4 --ignore=*/vendor/* --extensions=php"
+                ],
+                "sniffer:php80": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 8.0 --ignore=*/vendor/* --extensions=php"
+                ],
+                "sniffer:php81": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 8.1 --ignore=*/vendor/* --extensions=php"
+                ],
+                "sniffer:php82": [
+                    "phpcs -p ./ --standard=vendor/phpcompatibility/php-compatibility/PHPCompatibility --runtime-set testVersion 8.2 --ignore=*/vendor/* --extensions=php"
+                ]
+            },
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Konstantinos Galanakis",
+                    "email": "konstantinos.g@onthegosystems.com"
+                }
+            ],
+            "description": "Toolset Dynamic Sources API for blocks",
+            "keywords": [
+                "dynamic sources",
+                "gutenberg blocks",
+                "wordpress"
+            ],
+            "install-path": "../toolset/dynamic-sources"
+        }
+    ],
+    "dev": false,
+    "dev-package-names": []
+}

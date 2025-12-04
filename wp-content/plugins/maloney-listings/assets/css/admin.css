@@ -1,0 +1,32 @@
+/* Admin Styles */
+
+.listings-management-header {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-badge.status-pending {
+    background: #ffa500;
+    color: white;
+}
+
+.status-badge.status-notified {
+    background: #50c878;
+    color: white;
+}
+
+.status-badge.status-cancelled {
+    background: #999;
+    color: white;
+}
+

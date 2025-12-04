@@ -1,0 +1,172 @@
+# Copyright (C) 2025 WP Engine. All rights reserved.
+# This file is distributed under the same license as the wpe-update-source-selector package.
+msgid ""
+msgstr ""
+"Project-Id-Version: wpe-update-source-selector 1.1.5\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/src\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2025-05-29T19:26:16+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.11.0\n"
+"X-Domain: wpe-update-source-selector\n"
+
+#. Plugin Name of the plugin
+#: wpe-update-source-selector.php
+msgid "WP Engine Update Source Selector"
+msgstr ""
+
+#. Description of the plugin
+#: wpe-update-source-selector.php
+msgid "Install or update WordPress core, plugins, and themes from the source that works best for your site and workflows."
+msgstr ""
+
+#. Author of the plugin
+#: wpe-update-source-selector.php
+msgid "WP Engine"
+msgstr ""
+
+#. Author URI of the plugin
+#: wpe-update-source-selector.php
+msgid "https://wpengine.com"
+msgstr ""
+
+#: classes/admin-ui.php:150
+msgid "WordPress Update Source"
+msgstr ""
+
+#: classes/admin-ui.php:162
+msgid "Update Source"
+msgstr ""
+
+#. translators: Tab heading for WP Engine Update Source Selector settings page.
+#: classes/admin-ui.php:219
+msgctxt "WP Engine Update Source Selector"
+msgid "Settings"
+msgstr ""
+
+#. translators: Tab heading for WP Engine Update Source Selector settings page.
+#: classes/admin-ui.php:221
+msgctxt "WP Engine Update Source Selector"
+msgid "About"
+msgstr ""
+
+#: classes/admin-ui.php:391
+msgid "No tabs available to display."
+msgstr ""
+
+#: classes/admin-ui.php:463
+msgid "Your host is temporarily managing your source"
+msgstr ""
+
+#. translators: Param is current source name.
+#: classes/admin-ui.php:473
+msgid "To ensure continued availability of WordPress core, theme, and plugin updates, %s has been set as your active source. Settings on this page cannot be changed at this time."
+msgstr ""
+
+#: classes/admin-ui.php:584
+msgid "Settings saved."
+msgstr ""
+
+#: classes/sources/wpengine.php:47
+msgid "WP Engine's Mirror of the WordPress.org update service"
+msgstr ""
+
+#. translators: localized date strings
+#: classes/status-check-manager.php:167
+msgid "Checked %1$s, next check %2$s."
+msgstr ""
+
+#: classes/status-check-manager.php:190
+msgid "Source key not supplied."
+msgstr ""
+
+#. translators: Name of source set as default.
+#: classes/wpe-update-source-selector.php:279
+msgid "%s is the current default source configured in your hosting account."
+msgstr ""
+
+#. translators: Name of source set as default.
+#: classes/wpe-update-source-selector.php:288
+#: classes/wpe-update-source-selector.php:294
+msgid "%s is the current default source."
+msgstr ""
+
+#: views/content.php:33
+msgid "WP Engine Update Source Selector requires JavaScript."
+msgstr ""
+
+#. translators: Checking domain connectivity message for WP Engine Update Source Selector settings page.
+#: views/header.php:28
+msgid "Verifying connection to %s &hellip;"
+msgstr ""
+
+#. translators: Domain disconnected message for WP Engine Update Source Selector settings page.
+#: views/header.php:34
+msgid "%s is unreachable"
+msgstr ""
+
+#. translators: Domain connected message for WP Engine Update Source Selector settings page.
+#: views/header.php:40
+msgid "%s is reachable"
+msgstr ""
+
+#: views/header.php:57
+msgid "Checking ..."
+msgstr ""
+
+#: views/header.php:66
+msgid "Current Source Status:"
+msgstr ""
+
+#: views/header.php:93
+msgid "There was an unexpected error while checking the current source's status. Please refresh the page to try again."
+msgstr ""
+
+#: views/tabs.php:45
+msgid "Secondary menu"
+msgstr ""
+
+#. translators: Hidden accessibility text.
+#: views/tabs.php:89
+msgid "Toggle extra menu items"
+msgstr ""
+
+#: views/tabs/about.php:12
+msgid "About WP Engine Update Source Selector"
+msgstr ""
+
+#: views/tabs/about.php:16
+msgid "WP Engine Update Source Selector was developed by WP Engine to empower the WordPress community with the freedom to choose where WordPress core, plugins, and themes are downloaded from. With this plugin, your ability to keep your website up to date and secure no longer depends on a single source."
+msgstr ""
+
+#: views/tabs/settings.php:46
+msgid "WordPress Update Source Settings"
+msgstr ""
+
+#: views/tabs/settings.php:50
+msgid "When you install or update WordPress core, plugins, and themes, those assets are downloaded from a remote source via an API. If you do not wish to use the default source for this site, choose the source that works best for your site and workflows."
+msgstr ""
+
+#: views/tabs/settings.php:64
+msgid "Source settings"
+msgstr ""
+
+#: views/tabs/settings.php:79
+msgid "Use the default source configured for this site"
+msgstr ""
+
+#: views/tabs/settings.php:102
+msgid "Select a specific source"
+msgstr ""
+
+#: views/tabs/settings.php:110
+msgid "Source options"
+msgstr ""
+
+#: views/tabs/settings.php:139
+msgid "Save Changes"
+msgstr ""

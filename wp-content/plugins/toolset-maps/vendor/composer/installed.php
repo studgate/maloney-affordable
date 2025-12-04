@@ -1,0 +1,71 @@
+<?php return array(
+    'root' => array(
+        'pretty_version' => '2.2.1',
+        'version' => '2.2.1.0',
+        'type' => 'wordpress-plugin',
+        'install_path' => __DIR__ . '/../../',
+        'aliases' => array(),
+        'reference' => NULL,
+        'name' => 'toolset/views-addon-maps',
+        'dev' => false,
+    ),
+    'versions' => array(
+        'composer/installers' => array(
+            'pretty_version' => '1.x-dev',
+            'version' => '1.9999999.9999999.9999999-dev',
+            'type' => 'composer-plugin',
+            'install_path' => __DIR__ . '/./installers',
+            'aliases' => array(),
+            'reference' => '894a0b5c5d34c88b69b097f2aae1439730fa6836',
+            'dev_requirement' => false,
+        ),
+        'rdlowrey/auryn' => array(
+            'pretty_version' => 'v1.4.4',
+            'version' => '1.4.4.0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../rdlowrey/auryn',
+            'aliases' => array(),
+            'reference' => 'dae57592229d313b59414a2c8334e61e6eb00928',
+            'dev_requirement' => false,
+        ),
+        'roundcube/plugin-installer' => array(
+            'dev_requirement' => false,
+            'replaced' => array(
+                0 => '*',
+            ),
+        ),
+        'shama/baton' => array(
+            'dev_requirement' => false,
+            'replaced' => array(
+                0 => '*',
+            ),
+        ),
+        'toolset/common-es' => array(
+            'pretty_version' => '1.7.5',
+            'version' => '1.7.5.0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../toolset/common-es',
+            'aliases' => array(),
+            'reference' => 'fe33c0b91c837659c10612e954523f2c9a4d7aa6',
+            'dev_requirement' => false,
+        ),
+        'toolset/dynamic-sources' => array(
+            'pretty_version' => '2.5.8',
+            'version' => '2.5.8.0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../toolset/dynamic-sources',
+            'aliases' => array(),
+            'reference' => '71d9b32134d114cb393ac1883854877b1f49bf6d',
+            'dev_requirement' => false,
+        ),
+        'toolset/views-addon-maps' => array(
+            'pretty_version' => '2.2.1',
+            'version' => '2.2.1.0',
+            'type' => 'wordpress-plugin',
+            'install_path' => __DIR__ . '/../../',
+            'aliases' => array(),
+            'reference' => NULL,
+            'dev_requirement' => false,
+        ),
+    ),
+);
