@@ -8,6 +8,7 @@
     const ListingFilters = {
         lastSearchCoords: null,
         activeAreaSearch: null, // Store active area search bounds
+        isInitializingFromUrl: false, // Flag to prevent duplicate applyFilters calls during URL init
         init: function() {
             this.bindEvents();
             this.initAdvancedFilters();
@@ -77,59 +78,81 @@
                 // Add active state to clicked card
                 card.addClass('active');
                 
-                if (lat && lng && ListingFilters.map) {
-                    ListingFilters.map.setView([lat, lng], 15);
-                    
+                if (lat && lng && ListingFilters.map && ListingFilters.markerClusterGroup) {
                     // Remove active state from all markers
-                    if (ListingFilters.markerClusterGroup) {
+                    ListingFilters.markerClusterGroup.eachLayer(function(marker) {
+                        if (marker._icon) {
+                            marker._icon.classList.remove('marker-active');
+                            const innerDiv = marker._icon.querySelector('div');
+                            if (innerDiv) {
+                                innerDiv.classList.remove('marker-active-inner');
+                            }
+                            marker.setZIndexOffset(0);
+                        }
+                    });
+                    
+                    // Find the marker for this listing
+                    let markerFound = false;
+                    let foundMarker = null;
+                    
+                    // First try to find by listing ID (most reliable) - handle both string and number
+                    if (listingId) {
+                        const listingIdNum = parseInt(listingId, 10);
                         ListingFilters.markerClusterGroup.eachLayer(function(marker) {
-                            if (marker._icon) {
-                                marker._icon.classList.remove('marker-active');
+                            if (marker.options && marker.options.listingId) {
+                                const markerId = parseInt(marker.options.listingId, 10);
+                                // Match by ID (handle both string and number)
+                                if ((!isNaN(markerId) && !isNaN(listingIdNum) && markerId === listingIdNum) || 
+                                    marker.options.listingId == listingId) {
+                                    markerFound = true;
+                                    foundMarker = marker;
+                                    return false; // Break out of loop
+                                }
                             }
                         });
                     }
                     
-                    // Open popup for this listing if marker exists and highlight it
-                    if (ListingFilters.markerClusterGroup) {
-                        let markerFound = false;
-                        
-                        // First try to find by listing ID (most reliable)
-                        if (listingId) {
-                            ListingFilters.markerClusterGroup.eachLayer(function(marker) {
-                                if (marker.options && marker.options.listingId == listingId) {
-                                    markerFound = true;
-                                    // Add active class to marker
-                                    if (marker._icon) {
-                                        marker._icon.classList.add('marker-active');
-                                    }
-                                    // Open popup
-                                    marker.openPopup();
-                                    // Bring marker to front
-                                    marker.setZIndexOffset(1000);
+                    // Fallback: find by coordinates (within small tolerance)
+                    if (!markerFound && lat && lng) {
+                        const cardLat = parseFloat(lat);
+                        const cardLng = parseFloat(lng);
+                        ListingFilters.markerClusterGroup.eachLayer(function(marker) {
+                            const markerLat = parseFloat(marker.getLatLng().lat);
+                            const markerLng = parseFloat(marker.getLatLng().lng);
+                            
+                            // Check if this marker matches the clicked listing (within small tolerance)
+                            if (!isNaN(markerLat) && !isNaN(markerLng) && 
+                                Math.abs(markerLat - cardLat) < 0.0001 && 
+                                Math.abs(markerLng - cardLng) < 0.0001) {
+                                markerFound = true;
+                                foundMarker = marker;
+                                return false; // Break out of loop
+                            }
+                        });
+                    }
+                    
+                    // If marker found, zoom to show it (unclustering if needed) and highlight it
+                    if (markerFound && foundMarker) {
+                        // Use zoomToShowLayer to uncluster and zoom to the marker
+                        ListingFilters.markerClusterGroup.zoomToShowLayer(foundMarker, function() {
+                            // Callback executed after marker is visible (unclustered if needed)
+                            // Add active class to marker icon
+                            if (foundMarker._icon) {
+                                foundMarker._icon.classList.add('marker-active');
+                                // Also add to inner div for better styling
+                                const innerDiv = foundMarker._icon.querySelector('div');
+                                if (innerDiv) {
+                                    innerDiv.classList.add('marker-active-inner');
                                 }
-                            });
-                        }
-                        
-                        // Fallback: find by coordinates (within small tolerance)
-                        if (!markerFound) {
-                            ListingFilters.markerClusterGroup.eachLayer(function(marker) {
-                                const markerLat = marker.getLatLng().lat;
-                                const markerLng = marker.getLatLng().lng;
-                                
-                                // Check if this marker matches the clicked listing (within small tolerance)
-                                if (Math.abs(markerLat - lat) < 0.0001 && Math.abs(markerLng - lng) < 0.0001) {
-                                    markerFound = true;
-                                    // Add active class to marker
-                                    if (marker._icon) {
-                                        marker._icon.classList.add('marker-active');
-                                    }
-                                    // Open popup
-                                    marker.openPopup();
-                                    // Bring marker to front
-                                    marker.setZIndexOffset(1000);
-                                }
-                            });
-                        }
+                            }
+                            // Bring marker to front
+                            foundMarker.setZIndexOffset(1000);
+                            // Open popup
+                            foundMarker.openPopup();
+                        });
+                    } else {
+                        // If marker not found, just zoom to coordinates (fallback)
+                        ListingFilters.map.setView([lat, lng], 15);
                     }
                 }
             });
@@ -142,6 +165,10 @@
                         ListingFilters.markerClusterGroup.eachLayer(function(marker) {
                             if (marker._icon) {
                                 marker._icon.classList.remove('marker-active');
+                                const innerDiv = marker._icon.querySelector('div');
+                                if (innerDiv) {
+                                    innerDiv.classList.remove('marker-active-inner');
+                                }
                                 marker.setZIndexOffset(0);
                             }
                         });
@@ -702,12 +729,18 @@
             
             // Auto-apply filters on change (use event delegation for dynamically loaded content)
             $(document).on('change', '.auto-filter', function() {
-                ListingFilters.applyFilters();
+                // Don't auto-apply if we're initializing from URL (to prevent duplicate calls)
+                if (!ListingFilters.isInitializingFromUrl) {
+                    ListingFilters.applyFilters();
+                }
             });
             
             // Auto-apply filters on checkbox change
             $(document).on('change', '.auto-filter-checkbox', function() {
-                ListingFilters.applyFilters();
+                // Don't auto-apply if we're initializing from URL (to prevent duplicate calls)
+                if (!ListingFilters.isInitializingFromUrl) {
+                    ListingFilters.applyFilters();
+                }
             });
             
             // Show/hide filter options by selected listing type
@@ -831,8 +864,10 @@
                 $('input[name="listing_type_filter"]:checked').closest('.filter-option-button').addClass('checked');
                 $('input[name="listing_type_filter"]:not(:checked)').closest('.filter-option-button').removeClass('checked');
                 ListingFilters.refreshSummaries();
-                // Auto-apply filters when type changes
-                ListingFilters.applyFilters();
+                // Auto-apply filters when type changes (unless initializing from URL)
+                if (!ListingFilters.isInitializingFromUrl) {
+                    ListingFilters.applyFilters();
+                }
             });
             ListingFilters.refreshSummaries();
             
@@ -886,6 +921,9 @@
         // Prefill filters from URL query params and apply
         initFromUrl: function() {
             try {
+                // Set flag to prevent auto-filter handlers from triggering during initialization
+                this.isInitializingFromUrl = true;
+                
                 const params = new URLSearchParams(window.location.search);
                 let changed = false;
                 
@@ -941,13 +979,18 @@
                     $('#filter_location').val(city); 
                     $('#search_location_input').val(city);
                     changed = true; 
-                    // Center the map from URL lat/lng if present; else geocode
+                    // Always preserve lat/lng from URL if present (even if map isn't ready yet)
                     const lat = parseFloat(params.get('lat'));
                     const lng = parseFloat(params.get('lng'));
-                    if (!isNaN(lat) && !isNaN(lng) && this.map) {
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        // Store coordinates immediately so they're available when applyFilters() runs
                         this.lastSearchCoords = { lat: lat, lng: lng };
-                        this.map.setView([lat, lng], 12);
+                        // Center the map if it's ready, otherwise it will be centered when map initializes
+                        if (this.map) {
+                            this.map.setView([lat, lng], 12);
+                        }
                     } else {
+                        // Only geocode if coordinates weren't in URL
                         this.searchLocation(city);
                     }
                 }
@@ -1018,10 +1061,34 @@
                 // Update summaries
                 this.refreshSummaries();
                 
+                // Clear the flag before calling applyFilters
+                this.isInitializingFromUrl = false;
+                
                 if (changed) {
                     // Remember this URL for Back to Results
                     sessionStorage.setItem('ml_filters_url', window.location.pathname + window.location.search);
-                    this.applyFilters();
+                    // Wait for map to initialize before applying filters
+                    // This ensures the map is ready when updateMapMarkers() is called
+                    const self = this;
+                    const tryApplyFilters = (attempts) => {
+                        attempts = attempts || 0;
+                        if (self.map && self.markerClusterGroup) {
+                            // Map is ready, apply filters immediately
+                            self.applyFilters();
+                        } else if (attempts < 10) {
+                            // Map not ready yet, retry after 100ms (max 1 second total)
+                            setTimeout(() => {
+                                tryApplyFilters(attempts + 1);
+                            }, 100);
+                        } else {
+                            // Map still not ready after 1 second, apply filters anyway (updateMapMarkers will retry)
+                            self.applyFilters();
+                        }
+                    };
+                    // Start checking after a short delay to let map init start
+                    setTimeout(() => {
+                        tryApplyFilters(0);
+                    }, 200);
                 } else {
                     // No URL params, clear session storage and ensure filters are reset
                     sessionStorage.removeItem('ml_filters_url');
@@ -1034,7 +1101,10 @@
                         this.applyFilters();
                     }, 100);
                 }
-            } catch (e) {}
+            } catch (e) {
+                // Make sure to clear flag even if there's an error
+                this.isInitializingFromUrl = false;
+            }
         },
         
         applyFilters: function(e, page, paginationOnly) {
@@ -1056,7 +1126,8 @@
                     return $('#filter_listing_type').val() || '';
                 })(),
                 status: $('#filter_status').val() || '',
-                location: $('#filter_location').val() || '',
+                // Only set location if search_location is empty (to avoid duplicates)
+                location: resolvedSearchLocation ? '' : ($('#filter_location').val() || ''),
                 search_location: resolvedSearchLocation,
                 bedrooms: $('#filter_bedrooms').val() || '',
                 bathrooms: $('#filter_bathrooms').val() || '',
@@ -1091,11 +1162,20 @@
             if (this.activeAreaSearch && !paginationOnly) {
                 filters.map_bounds = this.activeAreaSearch;
             }
+            // DEBUG: Log filters being sent to backend
+            console.log('🔍 [DEBUG] applyFilters - Filters being sent:', filters);
+            console.log('🔍 [DEBUG] search_location:', filters.search_location);
+            console.log('🔍 [DEBUG] location:', filters.location);
+            console.log('🔍 [DEBUG] resolvedSearchLocation:', resolvedSearchLocation);
+            
             // Persist filters in URL + session for back-to-results
             try {
                 const params = new URLSearchParams();
                 if (filters.listing_type) params.set('type', filters.listing_type);
-                if (filters.location) params.set('city', filters.location);
+                // Don't set city from filters.location if search_location exists (to avoid duplicates)
+                if (filters.location && !filters.search_location) {
+                    params.set('city', filters.location);
+                }
                 if (filters.status) params.set('status', filters.status);
                 // Only add non-default values to URL (exclude "any" and "show_all")
                 (filters.bedrooms_multi||[]).filter(v => v !== 'any' && v !== 'show_all').forEach(v=>params.append('beds', v));
@@ -1108,7 +1188,7 @@
                 }
                 // Available Unit Type
                 (filters.available_unit_type||[]).forEach(v=>params.append('available_unit_type', v));
-            // Add search_location to URL if present
+            // Add search_location to URL if present (takes priority over location)
             if (filters.search_location) {
                 const searchLoc = filters.search_location.trim();
                 const isZip = /^\d{5}(-\d{4})?$/.test(searchLoc);
@@ -1121,6 +1201,15 @@
                     }
                 } else {
                     params.set('city', searchLoc);
+                    // Add coordinates to AJAX request for city searches (for nearby listings fallback)
+                    if (ListingFilters.lastSearchCoords && !isNaN(ListingFilters.lastSearchCoords.lat) && !isNaN(ListingFilters.lastSearchCoords.lng)) {
+                        // Pass coordinates both as search_location_lat/lng AND as lat/lng for city parameter
+                        filters.search_location_lat = ListingFilters.lastSearchCoords.lat;
+                        filters.search_location_lng = ListingFilters.lastSearchCoords.lng;
+                        // Also pass as lat/lng for city parameter compatibility (homepage search)
+                        filters.lat = ListingFilters.lastSearchCoords.lat;
+                        filters.lng = ListingFilters.lastSearchCoords.lng;
+                    }
                 }
             }
             // Add coordinates to URL if available
@@ -1234,6 +1323,11 @@
         },
         
         renderActiveFilters: function(filters) {
+            // DEBUG: Log filters to console
+            console.log('🔍 [DEBUG] renderActiveFilters - Filters object:', filters);
+            console.log('🔍 [DEBUG] search_location:', filters.search_location);
+            console.log('🔍 [DEBUG] location:', filters.location);
+            
             const chips = [];
             const push = (label, remove) => chips.push('<span class="chip" data-remove="'+remove+'">'+label+' <span class="x">×</span></span>');
             
@@ -1244,9 +1338,8 @@
             (filters.bathrooms_multi||[]).filter(v => v !== 'show_all' && v !== 'any').forEach(v=>push(v + ' Bath','baths:'+v));
             // Income Limits
             (filters.income_limits||[]).forEach(v=>push('Income Limit: ' + v,'income_limits:'+v));
-            // Location
-            if (filters.location) push(filters.location,'location');
-            // Search location (zip code or city from search input)
+            // Search location (zip code or city from search input) - takes priority
+            // ONLY show search_location, never show location to avoid duplicates
             if (filters.search_location) {
                 const searchLoc = filters.search_location.trim();
                 // Check if it's a zip code
@@ -1256,6 +1349,9 @@
                 } else {
                     push('Location: ' + searchLoc, 'search_location');
                 }
+            } else if (filters.location && !filters.search_location) {
+                // Only show location filter if search_location is completely not set (to avoid duplicates)
+                push(filters.location,'location');
             }
             // Listing Type - exclude empty (Show All)
             if (filters.listing_type && filters.listing_type !== 'show_all') {
@@ -1413,32 +1509,25 @@
             // Clear all filter inputs
             $('#filter_listing_type, #filter_status, #filter_location, #filter_bedrooms, #filter_bathrooms, #filter_income_level, #search_location_input').val('');
             $('#search_location_input').removeData('searchOverride');
-            $('input[name="amenities[]"], input[name="unit_type[]"], input[name="concessions"], input[name="just_listed"], input[name="bedroom_options[]"], input[name="bathroom_options[]"], input[name="income_levels[]"]').prop('checked', false);
+            $('input[name="amenities[]"], input[name="unit_type[]"], input[name="concessions"], input[name="just_listed"], input[name="bedroom_options[]"], input[name="bathroom_options[]"], input[name="income_levels[]"], input[name="has_available_units"], input[name="available_unit_type[]"], input[name="listing_type_filter"], input[name="rental_status[]"], input[name="condo_status[]"], input[name="status_filter[]"]').prop('checked', false);
             $('input[name="bedroom_options[]"][value="any"]').prop('checked', true).closest('.filter-option-button').addClass('checked');
             $('input[name="bathroom_options[]"][value="any"]').prop('checked', true).closest('.filter-option-button').addClass('checked');
+            $('input[name="listing_type_filter"][value="show_all"]').prop('checked', true).closest('.filter-option-button').addClass('checked');
+            $('input[name="status_filter[]"][value="show_all"]').prop('checked', true).closest('.filter-option-button').addClass('checked');
             
             // Clear area search
             this.activeAreaSearch = null;
             $('#active-filters').html('');
             
-            // Clear URL parameters
-            try {
-                history.replaceState(null, '', location.pathname);
-                sessionStorage.removeItem('ml_filters_url');
-            } catch(e) {}
+            // Clear session storage
+            sessionStorage.removeItem('ml_filters_url');
             
             // Clear last search coordinates so map doesn't center on old search
             this.lastSearchCoords = null;
             
-            // Reload all listings on the map (not filtered) - this will auto-zoom to biggest cluster
-            const allListings = window.maloneyListingsData || [];
-            if (allListings.length > 0 && this.map && this.markerClusterGroup) {
-                this.updateMapMarkers(allListings);
-            }
-            
-            // Update cards by calling applyFilters but tell it not to update the map
-            // Since all filters are cleared, this will fetch all listings for the cards
-            this.applyFilters(e, 1, true); // page 1, paginationOnly = true (don't update map)
+            // Reload the page to ensure all URL parameters are cleared (including type and has_units)
+            // This ensures a clean state without any lingering parameters
+            window.location.href = location.pathname;
         },
         
         searchVisibleArea: function(e) {
@@ -2058,25 +2147,20 @@
                     ? maloneyListingsSettings.condoColor 
                     : '#E4C780';
                 
-                const legendControl = L.control({ position: 'bottomright' });
+                const legendControl = L.control({ position: 'topright' });
                 legendControl.onAdd = function(map) {
-                    const div = L.DomUtil.create('div', 'map-legend');
-                    div.innerHTML = `
-                        <div class="map-legend-content">
-                            <div class="map-legend-title">Property Types</div>
-                            <div class="map-legend-item">
-                                <span class="legend-pin legend-pin-condo" style="background-color: ${legendCondoColor};"></span>
-                                <span class="legend-label">Condominiums</span>
-                            </div>
-                            <div class="map-legend-item">
-                                <span class="legend-pin legend-pin-rental" style="background-color: ${legendRentalColor};"></span>
-                                <span class="legend-label">Rentals</span>
-                            </div>
+                    const container = L.DomUtil.create('div', 'map-legend inline-legend');
+                    container.innerHTML = `
+                        <div class="inline map-legend-content">
+                            <span class="map-legend-title">Property Types:</span>
+                            <span class="legend-pin legend-pin-condo" style="background-color: ${legendCondoColor};"></span>
+                            <span class="legend-label">Condominiums</span>
+                            <span class="legend-pin legend-pin-rental" style="background-color: ${legendRentalColor};"></span>
+                            <span class="legend-label">Rentals</span>
                         </div>
                     `;
-                    // Prevent map click when clicking legend
-                    L.DomEvent.disableClickPropagation(div);
-                    return div;
+                    L.DomEvent.disableClickPropagation(container);
+                    return container;
                 };
                 legendControl.addTo(map);
                 
@@ -2098,15 +2182,9 @@
                 });
                 map.addLayer(this.markerClusterGroup);
                 
-                // Add all markers from listings data
-                // Wait a bit to ensure data is loaded
-                const self = this;
-                setTimeout(function() {
-                    const listingsData = window.maloneyListingsData || [];
-                    if (listingsData.length > 0) {
-                        self.updateMapMarkers(listingsData);
-                    }
-                }, 500);
+                // Don't load all markers automatically - wait for applyFilters() to load filtered results
+                // This ensures the map only shows markers matching the current filters (especially when coming from homepage search)
+                // The map will be populated when applyFilters() runs (either from initFromUrl or user interaction)
                 
                 // Make sure map fills container - wait a bit for layout to settle
                 setTimeout(function() {
@@ -2129,8 +2207,16 @@
             }
         },
         
-        updateMapMarkers: function(listings) {
+        updateMapMarkers: function(listings, retryCount) {
+            retryCount = retryCount || 0;
             if (!this.map || !this.markerClusterGroup) {
+                // Map not ready yet, retry after a short delay (max 5 retries = 1 second)
+                if (retryCount < 5) {
+                    const self = this;
+                    setTimeout(function() {
+                        self.updateMapMarkers(listings, retryCount + 1);
+                    }, 200);
+                }
                 return;
             }
             
@@ -2267,7 +2353,69 @@
                         popupContent += '</div>'; // Close content section
                         popupContent += '</div>'; // Close popup
                         
-                        marker.bindPopup(popupContent);
+                        // Calculate overlay width to position popup correctly
+                        const overlayWidth = $('.listings-cards-overlay').outerWidth() || 450;
+                        marker.bindPopup(popupContent, {
+                            autoPan: true,
+                            autoPanPaddingTopLeft: [overlayWidth + 80, 80],
+                            autoPanPaddingBottomRight: [80, 80],
+                        });
+                        
+                        // Handle marker click - clear previous active states and activate this marker
+                        marker.on('click', function(e) {
+                            // Remove active state from all listing cards
+                            $('.listing-card').removeClass('active');
+                            
+                            // Remove active state from all markers
+                            if (ListingFilters.markerClusterGroup) {
+                                ListingFilters.markerClusterGroup.eachLayer(function(otherMarker) {
+                                    if (otherMarker._icon && otherMarker !== marker) {
+                                        otherMarker._icon.classList.remove('marker-active');
+                                        const innerDiv = otherMarker._icon.querySelector('div');
+                                        if (innerDiv) {
+                                            innerDiv.classList.remove('marker-active-inner');
+                                        }
+                                        otherMarker.setZIndexOffset(0);
+                                    }
+                                });
+                            }
+                            
+                            // Activate this marker
+                            if (marker._icon) {
+                                marker._icon.classList.add('marker-active');
+                                const innerDiv = marker._icon.querySelector('div');
+                                if (innerDiv) {
+                                    innerDiv.classList.add('marker-active-inner');
+                                }
+                                marker.setZIndexOffset(1000);
+                            }
+                            
+                            // Highlight corresponding listing card if it exists
+                            if (marker.options && marker.options.listingId) {
+                                const listingId = marker.options.listingId;
+                                const matchingCard = $('.listing-card[data-listing-id="' + listingId + '"]');
+                                if (matchingCard.length > 0) {
+                                    matchingCard.addClass('active');
+                                    // Scroll card into view if needed
+                                    const cardOffset = matchingCard.offset();
+                                    const overlay = $('#listings-cards-overlay');
+                                    if (cardOffset && overlay.length) {
+                                        const overlayTop = overlay.offset().top;
+                                        const overlayHeight = overlay.height();
+                                        const cardTop = cardOffset.top;
+                                        const cardHeight = matchingCard.outerHeight();
+                                        
+                                        // Check if card is visible in overlay
+                                        if (cardTop < overlayTop || cardTop + cardHeight > overlayTop + overlayHeight) {
+                                            // Scroll to card
+                                            $('html, body').animate({
+                                                scrollTop: cardTop - overlayTop - 20
+                                            }, 300);
+                                        }
+                                    }
+                                }
+                            }
+                        });
                         
                         // Add close button functionality after popup is opened
                         marker.on('popupopen', function(e) {
@@ -2301,58 +2449,67 @@
                 }
             }.bind(this));
             
-            // Fit map to show all markers, but prioritize the area with most listings
+            // Fit map to show all markers
             if (bounds.length > 0) {
-                // Group markers by approximate location to find the densest cluster
-                // Use a simple grid-based approach to find the area with most markers
-                const gridSize = 0.5; // ~50km grid cells
-                const clusters = {};
-                let maxClusterCount = 0;
-                let maxClusterKey = null;
+                // Account for listings-cards-overlay on the left (typically 400-500px wide)
+                const overlayWidth = $('.listings-cards-overlay').outerWidth() || 450;
                 
-                bounds.forEach(function(coord) {
-                    const gridLat = Math.floor(coord[0] / gridSize) * gridSize;
-                    const gridLng = Math.floor(coord[1] / gridSize) * gridSize;
-                    const key = gridLat + ',' + gridLng;
-                    
-                    if (!clusters[key]) {
-                        clusters[key] = { count: 0, coords: [] };
-                    }
-                    clusters[key].count++;
-                    clusters[key].coords.push(coord);
-                });
-                
-                // Find the cluster with the most markers
-                for (const key in clusters) {
-                    if (clusters[key].count > maxClusterCount) {
-                        maxClusterCount = clusters[key].count;
-                        maxClusterKey = key;
-                    }
-                }
-                
-                // Always zoom to the densest cluster, even if it has fewer than 10 listings
-                // This ensures we focus on the area with the most listings
-                if (maxClusterKey && maxClusterCount > 0 && clusters[maxClusterKey].coords.length > 0) {
-                    // Zoom to the densest cluster area
-                    const clusterBounds = L.latLngBounds(clusters[maxClusterKey].coords);
-                    // Account for listings-cards-overlay on the left (typically 400-500px wide)
-                    // Use padding: [top, right, bottom, left] - add left padding for overlay
-                    const overlayWidth = $('.listings-cards-overlay').outerWidth() || 450;
-                    // Use a lower threshold for maxZoom to allow better zoom when filtering
-                    this.map.fitBounds(clusterBounds, { 
-                        padding: [50, 50, 50, overlayWidth + 50], 
-                        maxZoom: 15 
-                    });
-                } else {
-                    // Fit all markers if no clusters found
-                    // Account for listings-cards-overlay on the left
-                    const overlayWidth = $('.listings-cards-overlay').outerWidth() || 450;
-                    this.map.fitBounds(bounds, { 
-                        padding: [50, 50, 50, overlayWidth + 50] 
+                // If we have a small number of markers (10 or fewer), always fit to ALL markers
+                // This ensures users can see all results, not just the densest cluster
+                if (bounds.length <= 10) {
+                    // Create bounds from all markers
+                    const allBounds = L.latLngBounds(bounds);
+                    this.map.fitBounds(allBounds, { 
+                        padding: [50, 50, 50, overlayWidth + 50],
+                        maxZoom: 15
                     });
                     // If only one marker, ensure a sensible zoom
                     if (bounds.length === 1) {
                         this.map.setZoom(Math.max(this.map.getZoom(), 14));
+                    }
+                } else {
+                    // For many markers (>10), use clustering logic to find densest area
+                    // Group markers by approximate location to find the densest cluster
+                    // Use a simple grid-based approach to find the area with most markers
+                    const gridSize = 0.5; // ~50km grid cells
+                    const clusters = {};
+                    let maxClusterCount = 0;
+                    let maxClusterKey = null;
+                    
+                    bounds.forEach(function(coord) {
+                        const gridLat = Math.floor(coord[0] / gridSize) * gridSize;
+                        const gridLng = Math.floor(coord[1] / gridSize) * gridSize;
+                        const key = gridLat + ',' + gridLng;
+                        
+                        if (!clusters[key]) {
+                            clusters[key] = { count: 0, coords: [] };
+                        }
+                        clusters[key].count++;
+                        clusters[key].coords.push(coord);
+                    });
+                    
+                    // Find the cluster with the most markers
+                    for (const key in clusters) {
+                        if (clusters[key].count > maxClusterCount) {
+                            maxClusterCount = clusters[key].count;
+                            maxClusterKey = key;
+                        }
+                    }
+                    
+                    // Zoom to the densest cluster area
+                    if (maxClusterKey && maxClusterCount > 0 && clusters[maxClusterKey].coords.length > 0) {
+                        const clusterBounds = L.latLngBounds(clusters[maxClusterKey].coords);
+                        // Use a lower threshold for maxZoom to allow better zoom when filtering
+                        this.map.fitBounds(clusterBounds, { 
+                            padding: [50, 50, 50, overlayWidth + 50], 
+                            maxZoom: 15 
+                        });
+                    } else {
+                        // Fallback: fit all markers
+                        const allBounds = L.latLngBounds(bounds);
+                        this.map.fitBounds(allBounds, { 
+                            padding: [50, 50, 50, overlayWidth + 50] 
+                        });
                     }
                 }
             }

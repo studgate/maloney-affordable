@@ -14,12 +14,13 @@
 1. [Getting Started](#getting-started)
 2. [Adding a New Listing](#adding-a-new-listing)
 3. [Adding Rental Availability](#adding-rental-availability)
-4. [Checking and Verifying Addresses](#checking-and-verifying-addresses)
-5. [Geocoding Addresses](#geocoding-addresses)
-6. [Editing Existing Listings](#editing-existing-listings)
-7. [Common Tasks](#common-tasks)
-8. [Important Notes](#important-notes)
-9. [Troubleshooting](#troubleshooting)
+4. [Adding Condo Listings](#adding-condo-listings)
+5. [Checking and Verifying Addresses](#checking-and-verifying-addresses)
+6. [Geocoding Addresses](#geocoding-addresses)
+7. [Editing Existing Listings](#editing-existing-listings)
+8. [Common Tasks](#common-tasks)
+9. [Important Notes](#important-notes)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -36,11 +37,30 @@
 
 All new listings must be added using the **Listings** post type. The old post types are deprecated and will not appear on the website.
 
+### Logging In
+
+1. Go to `https://www.maloneyaffordable.com/wp-admin`
+2. Enter your login credentials
+3. If you don't have login information, contact:
+   - **ralph@responsab.com** or
+   - **hello@responsab.com** for access
+
 ### Accessing Listings
 
-1. In WordPress admin, look for **"Listings"** in the left sidebar
-2. Click **"Listings"** to see all existing listings
-3. Click **"Add New"** to create a new listing
+After logging in, you can access the listings page in two ways:
+
+**Option 1: From the Dashboard**
+1. After login, you'll see the WordPress dashboard
+2. Look for **"Listings"** in the left sidebar
+3. Click **"Listings"** to see all existing listings
+
+**Option 2: Direct URL**
+- Go directly to: `https://www.maloneyaffordable.com/wp-admin/edit.php?post_type=listing`
+- This takes you straight to the listings page
+
+Once on the listings page:
+- Click **"Add New"** to create a new listing
+- Use the filters at the top to search for specific listings
 
 ---
 
@@ -188,6 +208,56 @@ The **Rental Properties** field group will appear. Fill in:
 - Add availability as units become available
 - Remove or update availability when units are filled
 - Keep the information current for accurate search results
+
+---
+
+## Adding Condo Listings
+
+**⚠️ Important:** You do NOT need to migrate condo listings. All condo listings have been imported automatically from the Ninja Table data.
+
+**If a unit is missing:**
+1. Go to **Listings → Current Condo Listings**
+2. Check the **"Units That Could Not Be Imported"** section (if available)
+3. This will show you any units that couldn't be imported and why (e.g., property not found, property is not a condo, etc.)
+4. If needed, you can manually add missing units using the method below
+
+**Note:** This only applies to **Condo** listings.
+
+### Method 1: From the Listing Edit Page (Manual Entry)
+
+1. Edit the condo listing
+2. Find the **"Current Condo Listings"** field group
+3. Click **"Add Row"** or the **"+"** button
+4. Fill in for each available condo unit:
+   - **Property** - Select the property (auto-filled from the listing)
+   - **Town** - City/Town with neighborhood (e.g., "Boston | West Roxbury")
+   - **Unit Size** - Studio, 1-Bedroom, 2-Bedroom, etc.
+   - **Bathrooms** - Number of bathrooms
+   - **Price** - Purchase price
+   - **Income Limit (AMI %)** - Income limit as percentage (e.g., "80%" or "80% (Min) - 100% (Max)")
+   - **Type** - Lottery or FCFS (First Come First Serve)
+   - **Units Available** - Number of units available
+   - **Accessible Units** - Description if applicable
+   - **Learn More Link** - Link to property page (auto-filled from property)
+5. Click **"Add Row"** again for additional units
+6. Click **"Update"** to save
+
+### Method 2: From the Condo Listings Management Page (Manual Entry)
+
+**Note:** This is only needed if units are missing after migration. Most units are imported automatically.
+
+1. Go to **Listings → Current Condo Listings**
+2. Click **"Add New Condo Listing"**
+3. Select the **Property** from the dropdown
+4. Fill in all unit details (same as Method 1)
+5. Click **"Publish"**
+
+### Tips:
+- Add condo listings as units become available
+- Remove or update listings when units are sold
+- Keep the information current for accurate search results
+- Use the "Town" field format: "City | Neighborhood" (e.g., "Boston | West Roxbury")
+- Income limits can be simple percentages (e.g., "80%") or ranges (e.g., "80% (Min) - 100% (Max)")
 
 ---
 
@@ -409,10 +479,11 @@ If listings have addresses but no zip codes:
 - ⚠️ **Important:** Make sure the address is complete and correct (street, city, state, zip)
 - If geocoding fails, check that the address is properly formatted
 
-### Availability is Rental-Only
+### Availability and Listings
 
-- Only **Rental** listings have availability fields
-- **Condo** listings don't have availability (they use different systems)
+- **Rental** listings use **"Current Rental Availability"** field group
+- **Condo** listings use **"Current Condo Listings"** field group
+- Both systems work similarly but have different fields
 
 ### Field Groups
 
@@ -420,6 +491,7 @@ If listings have addresses but no zip codes:
 - **Condominiums** - Only appears for Condo listings
 - **Rental Properties** - Only appears for Rental listings
 - **Current Rental Availability** - Only appears for Rental listings
+- **Current Condo Listings** - Only appears for Condo listings
 
 ---
 
@@ -462,11 +534,19 @@ If listings have addresses but no zip codes:
 3. Check for typos in the address
 4. Wait a few minutes if you see rate limit errors
 
-### Availability Not Showing
+### Availability Not Showing (Rentals)
 
 **Check:**
-1. Is this a Rental listing? (Condos don't have availability)
+1. Is this a Rental listing?
 2. Are availability rows added in the "Current Rental Availability" field group?
+3. Is "Units Available" greater than 0?
+4. Is the listing published and active?
+
+### Condo Listings Not Showing
+
+**Check:**
+1. Is this a Condo listing?
+2. Are condo listing rows added in the "Current Condo Listings" field group?
 3. Is "Units Available" greater than 0?
 4. Is the listing published and active?
 
@@ -493,7 +573,8 @@ If you encounter issues not covered in this guide:
 | View all listings | **Listings → All Listings** |
 | Geocode addresses | **Listings → Geocode Addresses** |
 | Extract zip codes | **Listings → Extract Zip Codes** |
-| Manage availability | **Listings → Current Availability** |
+| Manage availability | **Listings → Current Availability** (Rentals) |
+| Manage condo listings | **Listings → Current Condo Listings** (Condos) |
 | Plugin settings | **Listings → Settings** |
 
 ### Required Fields Checklist

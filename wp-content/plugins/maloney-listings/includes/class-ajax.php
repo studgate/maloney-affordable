@@ -106,26 +106,17 @@ class Maloney_Listings_AJAX {
         
         if (!empty($_POST['listing_type'])) {
             $selected_type = sanitize_text_field($_POST['listing_type']);
-            // If available units filter is active, we need rentals in the query
-            // So if they selected a type that's not rental, we still need to include rentals
-            if ($has_available_units_filter_check && strpos(strtolower($selected_type), 'rental') === false) {
-                // Include both the selected type AND rentals
-                $args['tax_query'][] = array(
-                    'taxonomy' => 'listing_type',
-                    'field' => 'slug',
-                    'terms' => array($selected_type, 'rental', 'rental-properties'),
-                    'operator' => 'IN',
-                );
-            } else {
-                $args['tax_query'][] = array(
-                    'taxonomy' => 'listing_type',
-                    'field' => 'slug',
-                    'terms' => $selected_type,
-                );
-            }
+            $selected_type_lower = strtolower($selected_type);
+            // Always respect the selected listing type, even when available units filter is active
+            // The post-query filtering will handle checking availability for the correct type
+            $args['tax_query'][] = array(
+                'taxonomy' => 'listing_type',
+                'field' => 'slug',
+                'terms' => $selected_type,
+            );
         } elseif ($has_available_units_filter_check) {
             // If available units filter is active but no listing type filter, 
-            // we need to include rentals in the query to check their availability
+            // we need to include rentals AND condos in the query to check their availability
             // Don't filter by type - include all types, we'll filter post-query
         }
         
@@ -183,10 +174,13 @@ class Maloney_Listings_AJAX {
         }
         
         // Also handle search_location_input (from autocomplete)
-        // Store zip code search info for fallback to nearby listings
+        // Store zip code and city search info for fallback to nearby listings
         $zip_search_location = null;
         $zip_search_lat = null;
         $zip_search_lng = null;
+        $city_search_location = null;
+        $city_search_lat = null;
+        $city_search_lng = null;
         
         if (!empty($_POST['search_location'])) {
             global $wpdb;
@@ -195,34 +189,42 @@ class Maloney_Listings_AJAX {
             if ($search_location !== '') {
                 $is_zip = preg_match('/^\d{3,5}(-\d{4})?$/', $search_location);
                 
+                // Extract just the city name if "City, State" format (e.g., "Quincy, Ma" -> "Quincy")
+                // This ensures we match addresses like "33 Newport Avenue Quincy, MA" (no comma before city)
+                // and "33 Newport Avenue, Quincy, MA" (comma before city)
+                $search_value = $search_location;
+                if (!$is_zip && preg_match('/^([^,]+)/', $search_location, $matches)) {
+                    $search_value = trim($matches[1]);
+                }
+                
                 // WordPress automatically adds % and escapes for LIKE queries, so just pass the raw value
-                $search_meta_query = array(
-                    'relation' => 'OR',
-                    array(
-                        'key' => 'wpcf-address',
-                        'value' => $search_location,
-                        'compare' => 'LIKE',
-                    ),
-                    array(
-                        'key' => '_listing_address',
-                        'value' => $search_location,
-                        'compare' => 'LIKE',
-                    ),
-                    array(
-                        'key' => 'wpcf-city',
-                        'value' => $search_location,
-                        'compare' => 'LIKE',
-                    ),
-                    array(
-                        'key' => '_listing_city',
-                        'value' => $search_location,
-                        'compare' => 'LIKE',
-                    ),
-                    array(
+                    $search_meta_query = array(
+                                    'relation' => 'OR',
+                                    array(
+                                        'key' => 'wpcf-address',
+                        'value' => $search_value,
+                                        'compare' => 'LIKE',
+                                    ),
+                                    array(
+                                        'key' => '_listing_address',
+                        'value' => $search_value,
+                                        'compare' => 'LIKE',
+                                    ),
+                                    array(
+                                        'key' => 'wpcf-city',
+                        'value' => $search_value,
+                                        'compare' => 'LIKE',
+                                    ),
+                                    array(
+                                        'key' => '_listing_city',
+                        'value' => $search_value,
+                                        'compare' => 'LIKE',
+                                    ),
+                                array(
                         'key' => 'wpcf-availability-town',
-                        'value' => $search_location,
-                        'compare' => 'LIKE',
-                    ),
+                        'value' => $search_value,
+                                        'compare' => 'LIKE',
+                                    ),
                 );
                 
                 if ($is_zip) {
@@ -233,7 +235,7 @@ class Maloney_Listings_AJAX {
                         $zip_search_lng = floatval($_POST['search_location_lng']);
                     }
                     
-                    $search_meta_query[] = array(
+                                $search_meta_query[] = array(
                         'key' => 'wpcf-zip-code',
                         'value' => $search_location,
                         'compare' => '=',
@@ -248,9 +250,91 @@ class Maloney_Listings_AJAX {
                         'value' => $search_location,
                         'compare' => '=',
                     );
+                    } else {
+                    // City search - use extracted city name for consistency
+                    $city_search_location = $search_value;
+                    
+                    if (!empty($_POST['search_location_lat']) && !empty($_POST['search_location_lng'])) {
+                        $city_search_lat = floatval($_POST['search_location_lat']);
+                        $city_search_lng = floatval($_POST['search_location_lng']);
+                    }
                 }
                 
                 $args['meta_query'][] = $search_meta_query;
+            }
+        }
+        
+        // Also check for city parameter from URL (homepage search) or direct city POST
+        // Priority: search_location (with coordinates) > city parameter (with coordinates) > search_location (no coordinates)
+        if (empty($city_search_location)) {
+            // First, check if search_location was provided with coordinates (from listings page)
+            if (!empty($_POST['search_location']) && !preg_match('/^\d{3,5}(-\d{4})?$/', $_POST['search_location'])) {
+                $search_loc = sanitize_text_field($_POST['search_location']);
+                if (!empty($_POST['search_location_lat']) && !empty($_POST['search_location_lng'])) {
+                    $city_search_location = $search_loc;
+                    $city_search_lat = floatval($_POST['search_location_lat']);
+                    $city_search_lng = floatval($_POST['search_location_lng']);
+                } elseif (!empty($_POST['lat']) && !empty($_POST['lng'])) {
+                    // Fallback to lat/lng from URL (homepage search)
+                    $city_search_location = $search_loc;
+                    $city_search_lat = floatval($_POST['lat']);
+                    $city_search_lng = floatval($_POST['lng']);
+                }
+            }
+            // Then check city parameter (from homepage URL)
+            if (empty($city_search_location) && !empty($_POST['city'])) {
+                $city_param = sanitize_text_field($_POST['city']);
+                $city_search_location = $city_param;
+                
+                // Check for coordinates in POST data (from URL parameters)
+                if (!empty($_POST['lat']) && !empty($_POST['lng'])) {
+                    $city_search_lat = floatval($_POST['lat']);
+                    $city_search_lng = floatval($_POST['lng']);
+                }
+                
+                // Add search query for city parameter (same as search_location - search across address, city, availability-town)
+                // This ensures "Quincy" matches listings with "Quincy" in address, city, or availability-town fields
+                // The empty($city_search_location) check above ensures this only runs if search_location wasn't already processed
+                if (!isset($args['meta_query'])) {
+                    $args['meta_query'] = array();
+                                    }
+                
+                // Extract just the city name if "City, State" format (e.g., "Quincy, Ma" -> "Quincy")
+                // This ensures we match listings even if the address field has "Quincy, MA" format
+                $city_name_only = $city_param;
+                if (preg_match('/^([^,]+)/', $city_param, $matches)) {
+                    $city_name_only = trim($matches[1]);
+                }
+                
+                $city_search_meta_query = array(
+                                'relation' => 'OR',
+                                array(
+                                    'key' => 'wpcf-address',
+                        'value' => $city_name_only,
+                                    'compare' => 'LIKE',
+                                ),
+                                array(
+                                    'key' => '_listing_address',
+                        'value' => $city_name_only,
+                                    'compare' => 'LIKE',
+                                ),
+                                array(
+                                    'key' => 'wpcf-city',
+                        'value' => $city_name_only,
+                                    'compare' => 'LIKE',
+                                ),
+                                array(
+                                    'key' => '_listing_city',
+                        'value' => $city_name_only,
+                                    'compare' => 'LIKE',
+                                ),
+                    array(
+                                'key' => 'wpcf-availability-town',
+                        'value' => $city_name_only,
+                                'compare' => 'LIKE',
+                    ),
+                );
+                $args['meta_query'][] = $city_search_meta_query;
             }
         }
         
@@ -1025,10 +1109,10 @@ class Maloney_Listings_AJAX {
             );
         }
         
-        // Filter by available units (rentals only)
-        // "Show only properties with available units" - filter rentals where total-available-units > 0
+        // Filter by available units (rentals and condos)
+        // "Show only properties with available units" - filter rentals/condos where total-available-units > 0
         if (!empty($_POST['has_available_units'])) {
-            // This will be processed post-query since we need to check rental type
+            // This will be processed post-query since we need to check rental/condo type
             // Store flag for post-processing
             $args['_filter_has_available_units'] = true;
         }
@@ -1136,8 +1220,8 @@ class Maloney_Listings_AJAX {
         $available_unit_type_filter = isset($args['_filter_available_unit_type']) ? $args['_filter_available_unit_type'] : array();
         unset($args['_filter_has_available_units'], $args['_filter_available_unit_type']);
         
-        // If available units filter is active, we MUST include rentals in the query
-        // So modify the query to ensure rentals are included
+        // If available units filter is active, we MUST include rentals AND condos in the query
+        // So modify the query to ensure rentals and condos are included
         if ($has_available_units_filter || !empty($available_unit_type_filter)) {
             // Check if we already have a listing_type filter
             $has_type_filter = false;
@@ -1146,20 +1230,30 @@ class Maloney_Listings_AJAX {
                 if (isset($tax_query['taxonomy']) && $tax_query['taxonomy'] === 'listing_type') {
                     $has_type_filter = true;
                     $type_filter_index = $index;
-                    // If it's filtering to something other than rental, we need to add rental
+                    // If it's filtering to something other than rental/condo, we need to add both
                     if (isset($tax_query['terms'])) {
                         $terms = is_array($tax_query['terms']) ? $tax_query['terms'] : array($tax_query['terms']);
                         $has_rental = false;
+                        $has_condo = false;
                         foreach ($terms as $term) {
                             if (stripos($term, 'rental') !== false) {
                                 $has_rental = true;
-                                break;
+                            }
+                            if (stripos($term, 'condo') !== false) {
+                                $has_condo = true;
                             }
                         }
                         if (!$has_rental) {
                             // Add rental terms to the existing filter
                             $terms[] = 'rental';
                             $terms[] = 'rental-properties';
+                        }
+                        if (!$has_condo) {
+                            // Add condo terms to the existing filter
+                            $terms[] = 'condo';
+                            $terms[] = 'condominium';
+                        }
+                        if (!$has_rental || !$has_condo) {
                             $args['tax_query'][$index]['terms'] = array_unique($terms);
                             $args['tax_query'][$index]['operator'] = 'IN';
                         }
@@ -1168,10 +1262,10 @@ class Maloney_Listings_AJAX {
                 }
             }
             
-            // If no type filter exists, we need to ensure rentals are included
-            // Since available units filter only applies to rentals, we need rentals in the query
+            // If no type filter exists, we need to ensure rentals and condos are included
+            // Since available units filter applies to rentals and condos, we need both in the query
             // But we also want to show other types if they pass other filters
-            // So we don't restrict to ONLY rentals - we include all types, then filter post-query
+            // So we don't restrict to ONLY rentals/condos - we include all types, then filter post-query
         }
         
         // IMPORTANT: When available units filter or bathrooms filter is active, we need to query ALL listings first
@@ -1194,40 +1288,90 @@ class Maloney_Listings_AJAX {
         
         if ($has_available_units_filter || !empty($available_unit_type_filter) || $has_bathrooms_filter || $has_income_limits_filter) {
             // Query all posts when filtering by availability, bathrooms, or income limits (we'll paginate after filtering)
-            $args['posts_per_page'] = -1;
-            $args['paged'] = 1;
+        $args['posts_per_page'] = -1;
+        $args['paged'] = 1;
+        }
+        
+        // Exclude condos with status 3 (Closed Condo Lottery) and 4 (Inactive Condo Property) using meta_query
+        // This ensures pagination works correctly since exclusion happens at query level
+        if (empty($args['meta_query'])) {
+            $args['meta_query'] = array();
+        }
+        // Exclude posts where wpcf-condo-status is 3 or 4
+        // This will exclude condos with those statuses, but rentals (which don't have this field) will still be included
+        $args['meta_query'][] = array(
+            'relation' => 'OR',
+            // Include posts where wpcf-condo-status is NOT 3 or 4
+            array(
+                'key' => 'wpcf-condo-status',
+                'value' => array('3', '4'),
+                'compare' => 'NOT IN',
+            ),
+            // Include posts where wpcf-condo-status doesn't exist (rentals and condos without status)
+            array(
+                'key' => 'wpcf-condo-status',
+                'compare' => 'NOT EXISTS',
+            ),
+        );
+        
+        // Ensure meta_query has relation if multiple conditions
+        if (count($args['meta_query']) > 1 && !isset($args['meta_query']['relation'])) {
+            $args['meta_query']['relation'] = 'AND';
         }
         
         $query = new WP_Query($args);
         
-        // Post-process available units filters, bathrooms filters, and income limits filters (rentals only)
+        // Post-process available units filters, bathrooms filters, and income limits filters (rentals and condos)
         if ($has_available_units_filter || !empty($available_unit_type_filter) || $has_bathrooms_filter || $has_income_limits_filter) {
-            $filtered_posts = array();
-            foreach ($query->posts as $post) {
-                $post_id = $post->ID;
-                
-                // Check if this is a rental
-                $listing_type_terms = get_the_terms($post_id, 'listing_type');
+            // Check if a specific listing type was selected
+            $selected_listing_type = '';
+            $filter_for_rental = false;
+            $filter_for_condo = false;
+            if (!empty($_POST['listing_type'])) {
+                $selected_listing_type = strtolower(sanitize_text_field($_POST['listing_type']));
+                $filter_for_rental = (strpos($selected_listing_type, 'rental') !== false);
+                $filter_for_condo = (strpos($selected_listing_type, 'condo') !== false);
+            }
+            
+        $filtered_posts = array();
+        foreach ($query->posts as $post) {
+            $post_id = $post->ID;
+            
+                // Check if this is a rental or condo
+            $listing_type_terms = get_the_terms($post_id, 'listing_type');
                 $is_rental = false;
-                if ($listing_type_terms && !is_wp_error($listing_type_terms)) {
-                    $type_slug = strtolower($listing_type_terms[0]->slug);
+            $is_condo = false;
+            if ($listing_type_terms && !is_wp_error($listing_type_terms)) {
+                $type_slug = strtolower($listing_type_terms[0]->slug);
                     if (strpos($type_slug, 'rental') !== false) {
                         $is_rental = true;
                     }
+                    if (strpos($type_slug, 'condo') !== false) {
+                    $is_condo = true;
+                }
+            }
+            
+                // If a specific listing type was selected, only show that type
+                // This ensures that when filtering by "Condo + Has Available Units", only condos show up
+                if ($filter_for_rental && !$is_rental) {
+                    continue; // User selected rental, skip condos and other types
+                }
+                if ($filter_for_condo && !$is_condo) {
+                    continue; // User selected condo, skip rentals and other types
                 }
                 
-                // For available units filters, bathrooms filters, and income limits filters: ONLY show rentals that have availability data
-                if (!$is_rental && ($has_available_units_filter || !empty($available_unit_type_filter) || $has_bathrooms_filter || $has_income_limits_filter)) {
-                    // Exclude non-rentals when filter is active
+                // For available units filters, bathrooms filters, and income limits filters: ONLY show rentals/condos that have availability data
+                if (!$is_rental && !$is_condo && ($has_available_units_filter || !empty($available_unit_type_filter) || $has_bathrooms_filter || $has_income_limits_filter)) {
+                    // Exclude non-rentals/non-condos when filter is active
                     continue;
                 }
                 
-                // Get available units using repetitive field structure
+                // Get available units using repetitive field structure (for rentals)
                 $total_available = 0;
                 $availability_data = array();
                 $has_availability_data = false;
                 
-                if (class_exists('Maloney_Listings_Available_Units_Fields')) {
+                if ($is_rental && class_exists('Maloney_Listings_Available_Units_Fields')) {
                     // Get raw availability data
                     $availability_data_raw = Maloney_Listings_Available_Units_Fields::get_availability_data($post_id);
                     
@@ -1251,19 +1395,56 @@ class Maloney_Listings_AJAX {
                     $availability_data = Maloney_Listings_Available_Units_Fields::parse_availability_data($post_id);
                 }
                 
+                // Get condo listings data (for condos)
+                $condo_total_available = 0;
+                $condo_availability_data = array();
+                $has_condo_availability_data = false;
+                
+                if ($is_condo && class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+                    // Get condo listings data
+                    $condo_listings_data = Maloney_Listings_Condo_Listings_Fields::get_condo_listings_data($post_id);
+                    
+                    // Check if we have any condo listings entries at all
+                    $has_condo_availability_data = !empty($condo_listings_data);
+                    
+                    // Calculate total available from condo listings
+                    foreach ($condo_listings_data as $entry) {
+                        if (!empty($entry['units_available'])) {
+                            $units_text = $entry['units_available'];
+                            // Extract number from text like "1" or "2"
+                            if (preg_match('/(\d+)/', $units_text, $matches)) {
+                                $condo_total_available += intval($matches[1]);
+                            } else {
+                                $condo_total_available += intval($units_text);
+                            }
+                        }
+                    }
+                    
+                    // Parse for filtering (grouped by unit type)
+                    $condo_availability_data = Maloney_Listings_Condo_Listings_Fields::parse_condo_listings_data($post_id);
+                }
+                
                 // Apply filters
                 $include_post = true;
                 
-                // Filter: has available units - ONLY show rentals that have availability data AND total > 0
+                // Filter: has available units - show rentals/condos that have availability data AND total > 0
                 // If bedrooms are selected, also check that those specific bedroom sizes are available
                 if ($has_available_units_filter) {
-                    // Must have availability data AND total > 0
+                    // Must have availability data AND total > 0 (for rentals or condos)
+                    if ($is_rental) {
                     if (!$has_availability_data || $total_available <= 0) {
                         $include_post = false;
                     } else if (!empty($available_unit_type_filter)) {
                         // If bedrooms are selected (which auto-populate available_unit_type_filter),
                         // we need to check that those specific unit types are available
                         // This check is done below in the unit type availability filter
+                        }
+                    } elseif ($is_condo) {
+                        if (!$has_condo_availability_data || $condo_total_available <= 0) {
+                            $include_post = false;
+                        } else if (!empty($available_unit_type_filter)) {
+                            // For condos, we'll check unit type availability below
+                        }
                     }
                 }
                 
@@ -1293,8 +1474,10 @@ class Maloney_Listings_AJAX {
                         }
                     }
                     
-                    // Check if any availability data matches the requested types
-                    foreach ($availability_data as $item) {
+                    // Check if any availability data matches the requested types (for rentals)
+                    $data_to_check = $is_rental ? $availability_data : ($is_condo ? $condo_availability_data : array());
+                    
+                    foreach ($data_to_check as $item) {
                         if (isset($item['count']) && intval($item['count']) > 0) {
                             $item_unit_type = strtolower(trim($item['unit_type']));
                             
@@ -1433,6 +1616,15 @@ class Maloney_Listings_AJAX {
             $query->found_posts = $total_filtered;
             // Ensure max_num_pages is at least 1 if we have results
             $query->max_num_pages = $original_posts_per_page > 0 ? max(1, ceil($total_filtered / $original_posts_per_page)) : 1;
+        } else {
+            // When post-processing filters don't run, ensure max_num_pages is set correctly
+            // WordPress should set this automatically, but we ensure it's correct
+            $original_posts_per_page = isset($args['posts_per_page']) ? intval($args['posts_per_page']) : 12;
+            if ($original_posts_per_page > 0 && $query->found_posts > 0) {
+                $query->max_num_pages = max(1, ceil($query->found_posts / $original_posts_per_page));
+            } else {
+                $query->max_num_pages = 1;
+            }
         }
 
         // Build facet counts (Unit Type) without disabling
@@ -1542,97 +1734,721 @@ $posts = $query->posts;
             $query->posts = $posts;
         }
         
-        // Check if we need to find nearby listings for zip code search (before building map query)
+        // Check if we need to find nearby listings for zip code or city search (before building map query)
         $nearby_posts_for_map = null;
-        if (!$query->have_posts() && $zip_search_location && $zip_search_lat !== null && $zip_search_lng !== null) {
-            // Try to find nearby listings within 10 miles
-            $nearby_radius = 10; // miles
+        $search_coords = null;
+        $search_location_name = null;
+        
+        // Determine if we should do proximity search
+        if (!$query->have_posts()) {
+            if ($zip_search_location && $zip_search_lat !== null && $zip_search_lng !== null) {
+                $search_coords = array('lat' => $zip_search_lat, 'lng' => $zip_search_lng);
+                $search_location_name = $zip_search_location;
+            } elseif ($city_search_location && $city_search_lat !== null && $city_search_lng !== null) {
+                $search_coords = array('lat' => $city_search_lat, 'lng' => $city_search_lng);
+                $search_location_name = $city_search_location;
+            }
+        }
+        
+        if ($search_coords && $search_location_name) {
+            // Find closest 3-5 towns with listings
+            global $wpdb;
             
-            // Get all listings with coordinates
-            $all_listings_args = array(
+            // Get unique cities with listings and their coordinates
+            $cities_with_listings = $wpdb->get_results($wpdb->prepare("
+                SELECT DISTINCT 
+                    pm_city.meta_value as city,
+                    AVG(CAST(pm_lat.meta_value AS DECIMAL(10,8))) as avg_lat,
+                    AVG(CAST(pm_lng.meta_value AS DECIMAL(11,8))) as avg_lng
+                FROM {$wpdb->posts} p
+                INNER JOIN {$wpdb->postmeta} pm_city ON p.ID = pm_city.post_id 
+                    AND pm_city.meta_key = %s
+                INNER JOIN {$wpdb->postmeta} pm_lat ON p.ID = pm_lat.post_id 
+                    AND pm_lat.meta_key = '_listing_latitude'
+                INNER JOIN {$wpdb->postmeta} pm_lng ON p.ID = pm_lng.post_id 
+                    AND pm_lng.meta_key = '_listing_longitude'
+                WHERE p.post_type = 'listing'
+                AND p.post_status = 'publish'
+                AND pm_city.meta_value != ''
+                AND pm_city.meta_value IS NOT NULL
+                AND CAST(pm_lat.meta_value AS DECIMAL(10,8)) BETWEEN -90 AND 90
+                AND CAST(pm_lng.meta_value AS DECIMAL(11,8)) BETWEEN -180 AND 180
+                GROUP BY pm_city.meta_value
+                HAVING COUNT(DISTINCT p.ID) > 0
+            ", 'wpcf-city'));
+            
+            // Also check _listing_city
+            $cities_with_listings2 = $wpdb->get_results("
+                SELECT DISTINCT 
+                    pm_city.meta_value as city,
+                    AVG(CAST(pm_lat.meta_value AS DECIMAL(10,8))) as avg_lat,
+                    AVG(CAST(pm_lng.meta_value AS DECIMAL(11,8))) as avg_lng
+                FROM {$wpdb->posts} p
+                INNER JOIN {$wpdb->postmeta} pm_city ON p.ID = pm_city.post_id 
+                    AND pm_city.meta_key = '_listing_city'
+                INNER JOIN {$wpdb->postmeta} pm_lat ON p.ID = pm_lat.post_id 
+                    AND pm_lat.meta_key = '_listing_latitude'
+                INNER JOIN {$wpdb->postmeta} pm_lng ON p.ID = pm_lng.post_id 
+                    AND pm_lng.meta_key = '_listing_longitude'
+                WHERE p.post_type = 'listing'
+                AND p.post_status = 'publish'
+                AND pm_city.meta_value != ''
+                AND pm_city.meta_value IS NOT NULL
+                AND CAST(pm_lat.meta_value AS DECIMAL(10,8)) BETWEEN -90 AND 90
+                AND CAST(pm_lng.meta_value AS DECIMAL(11,8)) BETWEEN -180 AND 180
+                GROUP BY pm_city.meta_value
+                HAVING COUNT(DISTINCT p.ID) > 0
+            ");
+            
+            // Combine and deduplicate cities
+            $all_cities = array();
+            $city_map = array();
+            
+            foreach ($cities_with_listings as $row) {
+                $city = trim($row->city);
+                // Extract city name if it has "|" format
+                if (strpos($city, '|') !== false) {
+                    $city = trim(explode('|', $city)[0]);
+                }
+                if (!empty($city) && !isset($city_map[strtolower($city)])) {
+                    $city_map[strtolower($city)] = true;
+                    $all_cities[] = array(
+                        'city' => $city,
+                        'lat' => floatval($row->avg_lat),
+                        'lng' => floatval($row->avg_lng),
+                    );
+                }
+            }
+            
+            foreach ($cities_with_listings2 as $row) {
+                $city = trim($row->city);
+                if (strpos($city, '|') !== false) {
+                    $city = trim(explode('|', $city)[0]);
+                }
+                if (!empty($city) && !isset($city_map[strtolower($city)])) {
+                    $city_map[strtolower($city)] = true;
+                    $all_cities[] = array(
+                        'city' => $city,
+                        'lat' => floatval($row->avg_lat),
+                        'lng' => floatval($row->avg_lng),
+                    );
+                }
+            }
+            
+            // Calculate distances and sort
+            $city_distances = array();
+            foreach ($all_cities as $city_data) {
+                $distance = $this->calculate_distance(
+                    $search_coords['lat'],
+                    $search_coords['lng'],
+                    $city_data['lat'],
+                    $city_data['lng'],
+                    'mi'
+                );
+                $city_distances[] = array(
+                    'city' => $city_data['city'],
+                    'lat' => $city_data['lat'],
+                    'lng' => $city_data['lng'],
+                    'distance' => $distance,
+                );
+            }
+            
+            // Sort by distance
+            usort($city_distances, function($a, $b) {
+                return $a['distance'] <=> $b['distance'];
+            });
+            
+            // Get closest cities within 15 miles that have listings matching the current filters
+            // First, filter by distance
+            $max_distance = 15; // miles
+            $cities_within_range = array_filter($city_distances, function($city_data) use ($max_distance) {
+                return $city_data['distance'] <= $max_distance;
+            });
+            
+            // Check which cities actually have listings matching the current filters (e.g., condos)
+            // This prevents showing results from cities that don't have the requested listing type
+            $cities_with_matching_listings = array();
+            foreach ($cities_within_range as $city_data) {
+                $city_name = $city_data['city'];
+                
+                // Quick check: does this city have listings matching the current filters?
+                $check_args = array(
+                    'post_type' => 'listing',
+                    'posts_per_page' => 1, // Just check if any exist
+                    'post_status' => 'publish',
+                    'meta_query' => array(
+                        'relation' => 'OR',
+                        array(
+                            'key' => 'wpcf-city',
+                            'value' => $city_name,
+                            'compare' => 'LIKE',
+                        ),
+                        array(
+                            'key' => '_listing_city',
+                            'value' => $city_name,
+                            'compare' => 'LIKE',
+                        ),
+                    ),
+                );
+                
+                // Apply listing type filter if set (e.g., condo)
+                if (!empty($args['tax_query'])) {
+                    $check_args['tax_query'] = $args['tax_query'];
+                }
+                
+                $check_query = new WP_Query($check_args);
+                if ($check_query->found_posts > 0) {
+                    $cities_with_matching_listings[] = $city_data;
+                }
+                wp_reset_postdata();
+                
+                // Limit to closest 10 cities that have matching listings
+                // This ensures we show results from the closest relevant cities
+                if (count($cities_with_matching_listings) >= 10) {
+                    break;
+                }
+            }
+            
+            $closest_cities = $cities_with_matching_listings;
+            
+            if (!empty($closest_cities)) {
+                // Build query to get listings from these closest cities
+                $city_names = array();
+                foreach ($closest_cities as $city_data) {
+                    $city_names[] = $city_data['city'];
+                }
+                
+                // Build meta query for these cities
+                $city_meta_query = array(
+                    'relation' => 'OR',
+                );
+                
+                foreach ($city_names as $city_name) {
+                    $city_meta_query[] = array(
+                        'key' => 'wpcf-city',
+                        'value' => $city_name,
+                        'compare' => 'LIKE',
+                    );
+                    $city_meta_query[] = array(
+                        'key' => '_listing_city',
+                        'value' => $city_name,
+                        'compare' => 'LIKE',
+                    );
+                }
+                
+                // Build query args for listings from closest cities
+                $all_listings_args = array(
+                    'post_type' => 'listing',
+                    'posts_per_page' => -1,
+                    'post_status' => 'publish',
+                    'meta_query' => array(
+                        $city_meta_query,
+                    ),
+                );
+                
+                // Apply other filters (except location) to nearby search
+                if (!empty($args['tax_query'])) {
+                    $all_listings_args['tax_query'] = $args['tax_query'];
+                }
+                
+                // Copy other meta queries except location-based queries
+                if (!empty($args['meta_query'])) {
+                    if (empty($all_listings_args['meta_query'])) {
+                        $all_listings_args['meta_query'] = array();
+                    }
+                    foreach ($args['meta_query'] as $meta_query) {
+                        // Skip location-based meta queries
+                        if (is_array($meta_query)) {
+                            $is_location_query = false;
+                            if (isset($meta_query['key'])) {
+                                $key = $meta_query['key'];
+                                if (in_array($key, array('wpcf-zip-code', 'wpcf-zip', '_listing_zip', 'wpcf-city', '_listing_city', 'wpcf-address', '_listing_address', 'wpcf-availability-town'))) {
+                                    $is_location_query = true;
+                                }
+                            } elseif (isset($meta_query[0]) && is_array($meta_query[0])) {
+                                foreach ($meta_query as $sub_query) {
+                                    if (isset($sub_query['key']) && in_array($sub_query['key'], array('wpcf-zip-code', 'wpcf-zip', '_listing_zip', 'wpcf-city', '_listing_city', 'wpcf-address', '_listing_address', 'wpcf-availability-town'))) {
+                                        $is_location_query = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!$is_location_query) {
+                                $all_listings_args['meta_query'][] = $meta_query;
+                            }
+                        }
+                    }
+                }
+                
+                // If meta_query has multiple items, wrap in relation
+                if (count($all_listings_args['meta_query']) > 1) {
+                    $all_listings_args['meta_query']['relation'] = 'AND';
+                }
+                
+                $all_listings_query = new WP_Query($all_listings_args);
+                $nearby_posts = array();
+                
+                if ($all_listings_query->have_posts()) {
+                    while ($all_listings_query->have_posts()) {
+                        $all_listings_query->the_post();
+                        $nearby_posts[] = get_post(get_the_ID());
+                    }
+                    wp_reset_postdata();
+                }
+                
+                // Apply "Has available units" filter if needed (for both rentals and condos)
+                if ((isset($has_available_units_filter) && $has_available_units_filter) || (isset($available_unit_type_filter) && !empty($available_unit_type_filter))) {
+                    // Check if a specific listing type was selected
+                    $selected_listing_type = '';
+                    $filter_for_rental = false;
+                    $filter_for_condo = false;
+                    if (!empty($_POST['listing_type'])) {
+                        $selected_listing_type = strtolower(sanitize_text_field($_POST['listing_type']));
+                        $filter_for_rental = (strpos($selected_listing_type, 'rental') !== false);
+                        $filter_for_condo = (strpos($selected_listing_type, 'condo') !== false);
+                    }
+                    
+                    $filtered_nearby_posts = array();
+                    
+                    foreach ($nearby_posts as $post) {
+                        $post_id = $post->ID;
+                        
+                        // Check if this is a rental or condo
+                        $listing_type_terms = get_the_terms($post_id, 'listing_type');
+                        $is_rental = false;
+                        $is_condo = false;
+                        if ($listing_type_terms && !is_wp_error($listing_type_terms)) {
+                            $type_slug = strtolower($listing_type_terms[0]->slug);
+                            if (strpos($type_slug, 'rental') !== false) {
+                                $is_rental = true;
+                            }
+                            if (strpos($type_slug, 'condo') !== false) {
+                                $is_condo = true;
+                            }
+                        }
+                        
+                        // Note: Condos with status 3 & 4 are excluded via meta_query in the query args
+                        
+                        // If a specific listing type was selected, only show that type
+                        if ($filter_for_rental && !$is_rental) {
+                            continue; // User selected rental, skip condos and other types
+                        }
+                        if ($filter_for_condo && !$is_condo) {
+                            continue; // User selected condo, skip rentals and other types
+                        }
+                        
+                        // For "Has available units" filter: ONLY show rentals/condos that have availability data
+                        $has_avail_filter = isset($has_available_units_filter) && $has_available_units_filter;
+                        $has_unit_type_filter = isset($available_unit_type_filter) && !empty($available_unit_type_filter);
+                        
+                        if (!$is_rental && !$is_condo && ($has_avail_filter || $has_unit_type_filter)) {
+                            continue; // Skip non-rentals/non-condos
+                        }
+                        
+                        // Get available units data (for rentals)
+                        $total_available = 0;
+                        $availability_data = array();
+                        $has_availability_data = false;
+                        
+                        if ($is_rental && class_exists('Maloney_Listings_Available_Units_Fields')) {
+                            $availability_data_raw = Maloney_Listings_Available_Units_Fields::get_availability_data($post_id);
+                            $has_availability_data = !empty($availability_data_raw);
+                            
+                            foreach ($availability_data_raw as $entry) {
+                                if (!empty($entry['units_available'])) {
+                                    $units_text = $entry['units_available'];
+                                    if (preg_match('/(\d+)/', $units_text, $matches)) {
+                                        $total_available += intval($matches[1]);
+                                    } else {
+                                        $total_available += intval($units_text);
+                                    }
+                                }
+                            }
+                            
+                            // Parse for filtering (grouped by unit type)
+                            $availability_data = Maloney_Listings_Available_Units_Fields::parse_availability_data($post_id);
+                        }
+                        
+                        // Get condo listings data (for condos)
+                        $condo_total_available = 0;
+                        $condo_availability_data = array();
+                        $has_condo_availability_data = false;
+                        
+                        if ($is_condo && class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+                            // Get condo listings data
+                            $condo_listings_data = Maloney_Listings_Condo_Listings_Fields::get_condo_listings_data($post_id);
+                            
+                            // Check if we have any condo listings entries at all
+                            $has_condo_availability_data = !empty($condo_listings_data);
+                            
+                            // Calculate total available from condo listings
+                            foreach ($condo_listings_data as $entry) {
+                                if (!empty($entry['units_available'])) {
+                                    $units_text = $entry['units_available'];
+                                    // Extract number from text like "1" or "2"
+                                    if (preg_match('/(\d+)/', $units_text, $matches)) {
+                                        $condo_total_available += intval($matches[1]);
+                                    } else {
+                                        $condo_total_available += intval($units_text);
+                                    }
+                                }
+                            }
+                            
+                            // Parse for filtering (grouped by unit type)
+                            $condo_availability_data = Maloney_Listings_Condo_Listings_Fields::parse_condo_listings_data($post_id);
+                        }
+                        
+                        // Filter: has available units - must have availability data AND total > 0
+                        if ($has_avail_filter) {
+                            if ($is_rental) {
+                            if (!$has_availability_data || $total_available <= 0) {
+                                    continue; // Skip rentals without available units
+                                }
+                            } elseif ($is_condo) {
+                                if (!$has_condo_availability_data || $condo_total_available <= 0) {
+                                    continue; // Skip condos without available units
+                                }
+                            }
+                        }
+                        
+                        // Filter: unit type availability
+                        if ($has_unit_type_filter) {
+                            $unit_type_filter = isset($available_unit_type_filter) ? $available_unit_type_filter : array();
+                            $has_requested_type = false;
+                            
+                            // Map filter values to unit type patterns
+                            $type_patterns = array();
+                            foreach ($unit_type_filter as $filter_type) {
+                                $filter_type = strtolower(trim($filter_type));
+                                if ($filter_type === 'studio') {
+                                    $type_patterns[] = array('studio');
+                                } elseif ($filter_type === '1br' || $filter_type === '1-bedroom' || $filter_type === 'one bedroom') {
+                                    $type_patterns[] = array('1-bedroom', '1 bedroom', '1br', 'one bedroom');
+                                } elseif ($filter_type === '2br' || $filter_type === '2-bedroom' || $filter_type === 'two bedroom') {
+                                    $type_patterns[] = array('2-bedroom', '2 bedroom', '2br', 'two bedroom');
+                                } elseif ($filter_type === '3br' || $filter_type === '3-bedroom' || $filter_type === 'three bedroom') {
+                                    $type_patterns[] = array('3-bedroom', '3 bedroom', '3br', 'three bedroom');
+                                } elseif ($filter_type === '4br' || $filter_type === '4+br' || $filter_type === '4-bedroom' || $filter_type === 'four bedroom') {
+                                    $type_patterns[] = array('4+ bedroom', '4+bedroom', '4-bedroom', '4 bedroom', '4+br', '4br', 'four bedroom');
+                                } elseif ($filter_type === 'sro') {
+                                    $type_patterns[] = array('single room occupancy', 'sro', 'single room occupancy (sro)');
+                                }
+                            }
+                            
+                            // Check availability data (for rentals) or condo listings data (for condos)
+                            $data_to_check = $is_rental ? $availability_data : ($is_condo ? $condo_availability_data : array());
+                            
+                            foreach ($data_to_check as $item) {
+                                if (isset($item['count']) && intval($item['count']) > 0) {
+                                    $item_unit_type = strtolower(trim($item['unit_type']));
+                                    $normalized_type = $item_unit_type;
+                                    if (stripos($item_unit_type, 'single room occupancy') !== false || stripos($item_unit_type, 'sro') !== false) {
+                                        $normalized_type = 'single room occupancy';
+                                    } elseif (stripos($item_unit_type, 'studio') !== false) {
+                                        $normalized_type = 'studio';
+                                    } elseif (stripos($item_unit_type, '1-bedroom') !== false || stripos($item_unit_type, '1 bedroom') !== false) {
+                                        $normalized_type = '1-bedroom';
+                                    } elseif (stripos($item_unit_type, '2-bedroom') !== false || stripos($item_unit_type, '2 bedroom') !== false) {
+                                        $normalized_type = '2-bedroom';
+                                    } elseif (stripos($item_unit_type, '3-bedroom') !== false || stripos($item_unit_type, '3 bedroom') !== false) {
+                                        $normalized_type = '3-bedroom';
+                                    } elseif (stripos($item_unit_type, '4') !== false && (stripos($item_unit_type, 'bedroom') !== false || stripos($item_unit_type, 'br') !== false)) {
+                                        $normalized_type = '4+ bedroom';
+                                    }
+                                    
+                                    foreach ($type_patterns as $patterns) {
+                                        foreach ($patterns as $pattern) {
+                                            if (stripos($normalized_type, $pattern) !== false || stripos($item_unit_type, $pattern) !== false) {
+                                                    $has_requested_type = true;
+                                                    break 3;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if (!$has_requested_type) {
+                                continue; // Skip listings without requested unit types
+                            }
+                        }
+                        
+                        $filtered_nearby_posts[] = $post;
+                    }
+                    
+                    $nearby_posts = $filtered_nearby_posts;
+                }
+                
+                // Store nearby posts for both query and map_query
+                if (!empty($nearby_posts)) {
+                    $nearby_posts_for_map = $nearby_posts;
+                    // Also update the main query if it had no results
+                    if (!$query->have_posts()) {
+                        $query->posts = $nearby_posts;
+                        $query->post_count = count($nearby_posts);
+                        $query->found_posts = count($nearby_posts);
+                    }
+                }
+            }
+        }
+        
+        // If still no results after nearby cities search (or no location search), show all listings matching current filters (excluding location)
+        // This ensures we never show "No listings found" - always show something
+        if (!$query->have_posts() && $nearby_posts_for_map === null) {
+            // Build query for all listings matching current filters (but remove location filters)
+            $state_listings_args = array(
                 'post_type' => 'listing',
                 'posts_per_page' => -1,
                 'post_status' => 'publish',
-                'meta_query' => array(
-                    array(
-                        'key' => '_listing_latitude',
-                        'compare' => 'EXISTS',
-                    ),
-                    array(
-                        'key' => '_listing_longitude',
-                        'compare' => 'EXISTS',
-                    ),
-                ),
             );
             
-            // Apply other filters (except zip code) to nearby search
+            // Apply listing type filter if set
             if (!empty($args['tax_query'])) {
-                $all_listings_args['tax_query'] = $args['tax_query'];
+                $state_listings_args['tax_query'] = $args['tax_query'];
             }
             
-            // Copy other meta queries except zip code
+            // Copy other meta queries except location-based queries
             if (!empty($args['meta_query'])) {
-                $all_listings_args['meta_query'] = array();
                 foreach ($args['meta_query'] as $meta_query) {
-                    // Skip zip code meta queries
                     if (is_array($meta_query)) {
-                        $is_zip_query = false;
+                        $is_location_query = false;
                         if (isset($meta_query['key'])) {
                             $key = $meta_query['key'];
-                            if (in_array($key, array('wpcf-zip-code', 'wpcf-zip', '_listing_zip'))) {
-                                $is_zip_query = true;
+                            if (in_array($key, array('wpcf-zip-code', 'wpcf-zip', '_listing_zip', 'wpcf-city', '_listing_city', 'wpcf-address', '_listing_address', 'wpcf-availability-town'))) {
+                                $is_location_query = true;
                             }
                         } elseif (isset($meta_query[0]) && is_array($meta_query[0])) {
-                            // Check if any sub-query is a zip code query
                             foreach ($meta_query as $sub_query) {
-                                if (isset($sub_query['key']) && in_array($sub_query['key'], array('wpcf-zip-code', 'wpcf-zip', '_listing_zip'))) {
-                                    $is_zip_query = true;
+                                if (isset($sub_query['key']) && in_array($sub_query['key'], array('wpcf-zip-code', 'wpcf-zip', '_listing_zip', 'wpcf-city', '_listing_city', 'wpcf-address', '_listing_address', 'wpcf-availability-town'))) {
+                                    $is_location_query = true;
                                     break;
                                 }
                             }
                         }
-                        if (!$is_zip_query) {
-                            $all_listings_args['meta_query'][] = $meta_query;
+                        if (!$is_location_query) {
+                            if (empty($state_listings_args['meta_query'])) {
+                                $state_listings_args['meta_query'] = array();
+                            }
+                            $state_listings_args['meta_query'][] = $meta_query;
                         }
                     }
                 }
             }
             
-            $all_listings_query = new WP_Query($all_listings_args);
-            $nearby_posts = array();
+            // If meta_query has multiple items, wrap in relation
+            if (isset($state_listings_args['meta_query']) && count($state_listings_args['meta_query']) > 1) {
+                $state_listings_args['meta_query']['relation'] = 'AND';
+            }
             
-            if ($all_listings_query->have_posts()) {
-                while ($all_listings_query->have_posts()) {
-                    $all_listings_query->the_post();
-                    $post_id = get_the_ID();
-                    
-                    // Get listing coordinates
-                    $lat = get_post_meta($post_id, '_listing_latitude', true);
-                    $lng = get_post_meta($post_id, '_listing_longitude', true);
-                    
-                    // Convert to float and validate
-                    $lat = $lat ? floatval($lat) : 0;
-                    $lng = $lng ? floatval($lng) : 0;
-                    
-                    // Skip if no valid coordinates
-                    if ($lat == 0 || $lng == 0 || $lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
-                        continue;
-                    }
-                    
-                    // Calculate distance
-                    $distance = $this->calculate_distance($zip_search_lat, $zip_search_lng, $lat, $lng, 'mi');
-                    
-                    // Include if within radius
-                    if ($distance <= $nearby_radius) {
-                        $nearby_posts[] = get_post($post_id);
-                    }
+            $state_listings_query = new WP_Query($state_listings_args);
+            $state_posts = array();
+            
+            if ($state_listings_query->have_posts()) {
+                while ($state_listings_query->have_posts()) {
+                    $state_listings_query->the_post();
+                    $state_posts[] = get_post(get_the_ID());
                 }
                 wp_reset_postdata();
             }
             
-            // Store nearby posts for both query and map_query
-            if (!empty($nearby_posts)) {
-                $nearby_posts_for_map = $nearby_posts;
+            // Apply "Has available units" filter if needed (for both rentals and condos)
+            if ((isset($has_available_units_filter) && $has_available_units_filter) || (isset($available_unit_type_filter) && !empty($available_unit_type_filter))) {
+                // Check if a specific listing type was selected
+                $selected_listing_type = '';
+                $filter_for_rental = false;
+                $filter_for_condo = false;
+                if (!empty($_POST['listing_type'])) {
+                    $selected_listing_type = strtolower(sanitize_text_field($_POST['listing_type']));
+                    $filter_for_rental = (strpos($selected_listing_type, 'rental') !== false);
+                    $filter_for_condo = (strpos($selected_listing_type, 'condo') !== false);
+                }
+                
+                $filtered_state_posts = array();
+                
+                foreach ($state_posts as $post) {
+                $post_id = $post->ID;
+                
+                    // Check if this is a rental or condo
+                $listing_type_terms = get_the_terms($post_id, 'listing_type');
+                    $is_rental = false;
+                $is_condo = false;
+                if ($listing_type_terms && !is_wp_error($listing_type_terms)) {
+                    $type_slug = strtolower($listing_type_terms[0]->slug);
+                    if (strpos($type_slug, 'rental') !== false) {
+                        $is_rental = true;
+                    }
+                    if (strpos($type_slug, 'condo') !== false) {
+                        $is_condo = true;
+                    }
+                }
+                
+                    // Exclude condos with status 3 & 4
+                    if ($is_condo) {
+                        $condo_status = get_post_meta($post_id, 'wpcf-condo-status', true);
+                        if (empty($condo_status) && $condo_status !== '0' && $condo_status !== 0) {
+                            $condo_status = get_post_meta($post_id, '_listing_condo_status', true);
+                        }
+                        $condo_status = (string) $condo_status;
+                        if ($condo_status === '3' || $condo_status === '4') {
+                            continue; // Skip closed/inactive condos
+                        }
+                    }
+                
+                    // If a specific listing type was selected, only show that type
+                    if ($filter_for_rental && !$is_rental) {
+                        continue; // User selected rental, skip condos and other types
+                    }
+                    if ($filter_for_condo && !$is_condo) {
+                        continue; // User selected condo, skip rentals and other types
+                    }
+                    
+                    // For "Has available units" filter: ONLY show rentals/condos that have availability data
+                    $has_avail_filter = isset($has_available_units_filter) && $has_available_units_filter;
+                    $has_unit_type_filter = isset($available_unit_type_filter) && !empty($available_unit_type_filter);
+                    
+                    if (!$is_rental && !$is_condo && ($has_avail_filter || $has_unit_type_filter)) {
+                        continue; // Skip non-rentals/non-condos
+                    }
+                    
+                    // Get available units data (for rentals)
+                    $total_available = 0;
+                    $availability_data = array();
+                    $has_availability_data = false;
+                    
+                    if ($is_rental && class_exists('Maloney_Listings_Available_Units_Fields')) {
+                        $availability_data_raw = Maloney_Listings_Available_Units_Fields::get_availability_data($post_id);
+                        $has_availability_data = !empty($availability_data_raw);
+                        
+                        foreach ($availability_data_raw as $entry) {
+                            if (!empty($entry['units_available'])) {
+                                $units_text = $entry['units_available'];
+                                if (preg_match('/(\d+)/', $units_text, $matches)) {
+                                    $total_available += intval($matches[1]);
+                                } else {
+                                    $total_available += intval($units_text);
+                                }
+                            }
+                        }
+                        
+                        // Parse for filtering (grouped by unit type)
+                        $availability_data = Maloney_Listings_Available_Units_Fields::parse_availability_data($post_id);
+                    }
+                    
+                    // Get condo listings data (for condos)
+                    $condo_total_available = 0;
+                    $condo_availability_data = array();
+                    $has_condo_availability_data = false;
+                    
+                    if ($is_condo && class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+                        // Get condo listings data
+                        $condo_listings_data = Maloney_Listings_Condo_Listings_Fields::get_condo_listings_data($post_id);
+                        
+                        // Check if we have any condo listings entries at all
+                        $has_condo_availability_data = !empty($condo_listings_data);
+                        
+                        // Calculate total available from condo listings
+                        foreach ($condo_listings_data as $entry) {
+                            if (!empty($entry['units_available'])) {
+                                $units_text = $entry['units_available'];
+                                // Extract number from text like "1" or "2"
+                                if (preg_match('/(\d+)/', $units_text, $matches)) {
+                                    $condo_total_available += intval($matches[1]);
+                                } else {
+                                    $condo_total_available += intval($units_text);
+                                }
+                            }
+                        }
+                        
+                        // Parse for filtering (grouped by unit type)
+                        $condo_availability_data = Maloney_Listings_Condo_Listings_Fields::parse_condo_listings_data($post_id);
+                    }
+                    
+                    // Filter: has available units - must have availability data AND total > 0
+                    if ($has_avail_filter) {
+                        if ($is_rental) {
+                            if (!$has_availability_data || $total_available <= 0) {
+                                continue; // Skip rentals without available units
+                            }
+                        } elseif ($is_condo) {
+                            if (!$has_condo_availability_data || $condo_total_available <= 0) {
+                                continue; // Skip condos without available units
+                            }
+                    }
+                }
+                
+                    // Filter: unit type availability
+                    if ($has_unit_type_filter) {
+                        $unit_type_filter = isset($available_unit_type_filter) ? $available_unit_type_filter : array();
+                        $has_requested_type = false;
+                        
+                        // Map filter values to unit type patterns
+                        $type_patterns = array();
+                        foreach ($unit_type_filter as $filter_type) {
+                            $filter_type = strtolower(trim($filter_type));
+                            if ($filter_type === 'studio') {
+                                $type_patterns[] = array('studio');
+                            } elseif ($filter_type === '1br' || $filter_type === '1-bedroom' || $filter_type === 'one bedroom') {
+                                $type_patterns[] = array('1-bedroom', '1 bedroom', '1br', 'one bedroom');
+                            } elseif ($filter_type === '2br' || $filter_type === '2-bedroom' || $filter_type === 'two bedroom') {
+                                $type_patterns[] = array('2-bedroom', '2 bedroom', '2br', 'two bedroom');
+                            } elseif ($filter_type === '3br' || $filter_type === '3-bedroom' || $filter_type === 'three bedroom') {
+                                $type_patterns[] = array('3-bedroom', '3 bedroom', '3br', 'three bedroom');
+                            } elseif ($filter_type === '4br' || $filter_type === '4+br' || $filter_type === '4-bedroom' || $filter_type === 'four bedroom') {
+                                $type_patterns[] = array('4+ bedroom', '4+bedroom', '4-bedroom', '4 bedroom', '4+br', '4br', 'four bedroom');
+                            } elseif ($filter_type === 'sro') {
+                                $type_patterns[] = array('single room occupancy', 'sro', 'single room occupancy (sro)');
+                            }
+                        }
+                        
+                        // Check availability data (for rentals) or condo listings data (for condos)
+                        $data_to_check = $is_rental ? $availability_data : ($is_condo ? $condo_availability_data : array());
+                        
+                        foreach ($data_to_check as $item) {
+                            if (isset($item['count']) && intval($item['count']) > 0) {
+                                $item_unit_type = strtolower(trim($item['unit_type']));
+                                $normalized_type = $item_unit_type;
+                                if (stripos($item_unit_type, 'single room occupancy') !== false || stripos($item_unit_type, 'sro') !== false) {
+                                    $normalized_type = 'single room occupancy';
+                                } elseif (stripos($item_unit_type, 'studio') !== false) {
+                                    $normalized_type = 'studio';
+                                } elseif (stripos($item_unit_type, '1-bedroom') !== false || stripos($item_unit_type, '1 bedroom') !== false) {
+                                    $normalized_type = '1-bedroom';
+                                } elseif (stripos($item_unit_type, '2-bedroom') !== false || stripos($item_unit_type, '2 bedroom') !== false) {
+                                    $normalized_type = '2-bedroom';
+                                } elseif (stripos($item_unit_type, '3-bedroom') !== false || stripos($item_unit_type, '3 bedroom') !== false) {
+                                    $normalized_type = '3-bedroom';
+                                } elseif (stripos($item_unit_type, '4') !== false && (stripos($item_unit_type, 'bedroom') !== false || stripos($item_unit_type, 'br') !== false)) {
+                                    $normalized_type = '4+ bedroom';
+                                }
+                                
+                                foreach ($type_patterns as $patterns) {
+                                    foreach ($patterns as $pattern) {
+                                        if (stripos($normalized_type, $pattern) !== false || stripos($item_unit_type, $pattern) !== false) {
+                                            $has_requested_type = true;
+                                            break 3;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (!$has_requested_type) {
+                            continue; // Skip listings without requested unit types
+                        }
+                    }
+                    
+                    $filtered_state_posts[] = $post;
+                }
+                
+                $state_posts = $filtered_state_posts;
+            }
+            
+            // Store state posts for both query and map_query
+            if (!empty($state_posts)) {
+                $nearby_posts_for_map = $state_posts;
+                // Update the main query
+                $query->posts = $state_posts;
+                $query->post_count = count($state_posts);
+                $query->found_posts = count($state_posts);
             }
         }
         
@@ -1645,13 +2461,18 @@ $posts = $query->posts;
         unset($map_query_args['_filter_has_available_units'], $map_query_args['_filter_available_unit_type'], $map_query_args['_filter_bathrooms']);
         
         // If we had post-processed filtering (available units), we need to apply the same logic
+        // Note: Condos with status 3 & 4 are already excluded via meta_query in map_query_args (copied from $args)
         $map_query = new WP_Query($map_query_args);
         
-        // If we found nearby posts for zip code search, update map_query to use them too
+        // If we found nearby posts for city/zip code search, update map_query to use them
+        // BUT: We'll update this later to use only the posts that are in the actual results (after pagination)
+        // For now, set it but we'll override it after pagination is applied
         if ($nearby_posts_for_map !== null && !empty($nearby_posts_for_map)) {
             $map_query->posts = $nearby_posts_for_map;
             $map_query->post_count = count($nearby_posts_for_map);
             $map_query->found_posts = count($nearby_posts_for_map);
+            // Reset query state so have_posts() works correctly
+            $map_query->current_post = -1;
         }
         
         // Get bathrooms filter options if set
@@ -1660,31 +2481,53 @@ $posts = $query->posts;
         
         // If available units filter or bathrooms filter was active, apply the same post-processing
         if ($has_available_units_filter || !empty($available_unit_type_filter) || $has_bathrooms_filter) {
+            // Check if a specific listing type was selected
+            $selected_listing_type = '';
+            $filter_for_rental = false;
+            $filter_for_condo = false;
+            if (!empty($_POST['listing_type'])) {
+                $selected_listing_type = strtolower(sanitize_text_field($_POST['listing_type']));
+                $filter_for_rental = (strpos($selected_listing_type, 'rental') !== false);
+                $filter_for_condo = (strpos($selected_listing_type, 'condo') !== false);
+            }
+            
             $map_filtered_posts = array();
             foreach ($map_query->posts as $post) {
                 $post_id = $post->ID;
                 
-                // Check if this is a rental
+                // Check if this is a rental or condo
                 $listing_type_terms = get_the_terms($post_id, 'listing_type');
                 $is_rental = false;
+                $is_condo = false;
                 if ($listing_type_terms && !is_wp_error($listing_type_terms)) {
                     $type_slug = strtolower($listing_type_terms[0]->slug);
                     if (strpos($type_slug, 'rental') !== false) {
                         $is_rental = true;
                     }
+                    if (strpos($type_slug, 'condo') !== false) {
+                        $is_condo = true;
+                    }
                 }
                 
-                // For available units filters and bathrooms filters: ONLY show rentals that have availability data
-                if (!$is_rental && ($has_available_units_filter || !empty($available_unit_type_filter) || $has_bathrooms_filter)) {
+                // If a specific listing type was selected, only show that type
+                if ($filter_for_rental && !$is_rental) {
+                    continue; // User selected rental, skip condos and other types
+                }
+                if ($filter_for_condo && !$is_condo) {
+                    continue; // User selected condo, skip rentals and other types
+                }
+                
+                // For available units filters and bathrooms filters: ONLY show rentals/condos that have availability data
+                if (!$is_rental && !$is_condo && ($has_available_units_filter || !empty($available_unit_type_filter) || $has_bathrooms_filter)) {
                     continue;
                 }
                 
-                // Get available units using repetitive field structure
+                // Get available units using repetitive field structure (for rentals)
                 $total_available = 0;
                 $availability_data = array();
                 $has_availability_data = false;
                 
-                if (class_exists('Maloney_Listings_Available_Units_Fields')) {
+                if ($is_rental && class_exists('Maloney_Listings_Available_Units_Fields')) {
                     $availability_data_raw = Maloney_Listings_Available_Units_Fields::get_availability_data($post_id);
                     $has_availability_data = !empty($availability_data_raw);
                     
@@ -1701,12 +2544,48 @@ $posts = $query->posts;
                     $availability_data = Maloney_Listings_Available_Units_Fields::parse_availability_data($post_id);
                 }
                 
+                // Get condo listings data (for condos)
+                $condo_total_available = 0;
+                $condo_availability_data = array();
+                $has_condo_availability_data = false;
+                
+                if ($is_condo && class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+                    // Get condo listings data
+                    $condo_listings_data = Maloney_Listings_Condo_Listings_Fields::get_condo_listings_data($post_id);
+                    
+                    // Check if we have any condo listings entries at all
+                    $has_condo_availability_data = !empty($condo_listings_data);
+                    
+                    // Calculate total available from condo listings
+                    foreach ($condo_listings_data as $entry) {
+                        if (!empty($entry['units_available'])) {
+                            $units_text = $entry['units_available'];
+                            // Extract number from text like "1" or "2"
+                            if (preg_match('/(\d+)/', $units_text, $matches)) {
+                                $condo_total_available += intval($matches[1]);
+                            } else {
+                                $condo_total_available += intval($units_text);
+                            }
+                        }
+                    }
+                    
+                    // Parse for filtering (grouped by unit type)
+                    $condo_availability_data = Maloney_Listings_Condo_Listings_Fields::parse_condo_listings_data($post_id);
+                }
+                
                 // Apply filters
                 $include_post = true;
                 
                 if ($has_available_units_filter) {
+                    // Must have availability data AND total > 0 (for rentals or condos)
+                    if ($is_rental) {
                     if (!$has_availability_data || $total_available <= 0) {
                         $include_post = false;
+                        }
+                    } elseif ($is_condo) {
+                        if (!$has_condo_availability_data || $condo_total_available <= 0) {
+                            $include_post = false;
+                        }
                     }
                 }
                 
@@ -1730,7 +2609,10 @@ $posts = $query->posts;
                         }
                     }
                     
-                    foreach ($availability_data as $item) {
+                    // Check availability data (for rentals) or condo listings data (for condos)
+                    $data_to_check = $is_rental ? $availability_data : ($is_condo ? $condo_availability_data : array());
+                    
+                    foreach ($data_to_check as $item) {
                         if (isset($item['count']) && intval($item['count']) > 0) {
                             $item_unit_type = strtolower(trim($item['unit_type']));
                             $normalized_type = $item_unit_type;
@@ -1823,10 +2705,15 @@ $posts = $query->posts;
             $map_query->posts = $map_filtered_posts;
         }
         
+        // IMPORTANT: If we have nearby posts, the map should only show the listings that are in the actual results
+        // (the paginated results), not all nearby posts. This ensures map pins match the displayed listings.
+        // Note: This check happens after pagination is applied to $query->posts
+        // We'll update map_query after pagination is applied (see below after line 2571)
+        
         ob_start();
         $listings_data = array();
         
-        // Build map data from ALL matching listings (not just current page)
+        // Build map data from listings in the results (matches what's displayed on the page)
         if ($map_query->have_posts()) {
             while ($map_query->have_posts()) {
                 $map_query->the_post();
@@ -2081,6 +2968,16 @@ $posts = $query->posts;
             } else {
                 $query->max_num_pages = 1;
             }
+            
+            // IMPORTANT: Update map_query to use only the posts that are in the actual results (after pagination)
+            // This ensures map pins match exactly what's displayed on the page - only 7 pins for 7 results
+            if (!empty($query->posts)) {
+                $map_query->posts = $query->posts;
+                $map_query->post_count = count($query->posts);
+                $map_query->found_posts = count($query->posts);
+                // Reset query state so have_posts() works correctly
+                $map_query->current_post = -1;
+            }
         }
         
         // Generate HTML for listing cards
@@ -2104,19 +3001,19 @@ $posts = $query->posts;
         $current_page = isset($_POST['page']) ? intval($_POST['page']) : 1;
         
         // Add pagination HTML directly to the main HTML output (inside listings-grid)
-        echo '<div class="listings-pagination" id="listings-pagination">';
+            echo '<div class="listings-pagination" id="listings-pagination">';
         if ($found_posts > 0 && $max_pages > 0) {
             if ($max_pages > 1) {
-                echo paginate_links(array(
-                    'total' => $max_pages,
-                    'current' => $current_page,
-                    'prev_text' => __('&laquo; Previous', 'maloney-listings'),
-                    'next_text' => __('Next &raquo;', 'maloney-listings'),
-                ));
-            } else {
+            echo paginate_links(array(
+                'total' => $max_pages,
+                'current' => $current_page,
+                'prev_text' => __('&laquo; Previous', 'maloney-listings'),
+                'next_text' => __('Next &raquo;', 'maloney-listings'),
+            ));
+        } else {
                 // Show pagination container even for single page to maintain layout
                 echo '<span class="page-numbers current">1</span>';
-            }
+        }
         }
         echo '</div>';
         
@@ -2126,12 +3023,12 @@ $posts = $query->posts;
         ob_start();
         if ($found_posts > 0 && $max_pages > 0) {
             if ($max_pages > 1) {
-                echo paginate_links(array(
-                    'total' => $max_pages,
-                    'current' => $current_page,
-                    'prev_text' => __('&laquo; Previous', 'maloney-listings'),
-                    'next_text' => __('Next &raquo;', 'maloney-listings'),
-                ));
+            echo paginate_links(array(
+                'total' => $max_pages,
+                'current' => $current_page,
+                'prev_text' => __('&laquo; Previous', 'maloney-listings'),
+                'next_text' => __('Next &raquo;', 'maloney-listings'),
+            ));
             } else {
                 echo '<span class="page-numbers current">1</span>';
             }
@@ -2227,7 +3124,7 @@ $posts = $query->posts;
         
         // Similar bedrooms (±1)
         if ($bedrooms) {
-            $args['meta_query'][] = array(
+        $args['meta_query'][] = array(
                 'key' => '_listing_bedrooms',
                 'value' => array(max(0, $bedrooms - 1), $bedrooms + 1),
                 'type' => 'NUMERIC',
@@ -2268,7 +3165,7 @@ $posts = $query->posts;
         if (!empty($query->posts)) return $query->posts;
         // Fallback: relax constraints
         unset($args['meta_query']);
-        $query = new WP_Query($args);
+            $query = new WP_Query($args);
         return $query->posts;
     }
     

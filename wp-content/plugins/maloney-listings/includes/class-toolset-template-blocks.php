@@ -21,10 +21,11 @@ class Maloney_Listings_Toolset_Template_Blocks {
      * @param string $block_name Block name (e.g., 'maloney-listings/availability-block')
      * @param array $block_attributes Block attributes
      * @param string $position Where to insert: 'before', 'after', 'replace', 'append', 'prepend'
-     * @param string $anchor_block_name Optional: Block name to insert before/after
+     * @param string $anchor_block_name Optional: Block name or content pattern to insert before/after
+     * @param bool $search_by_content If true, search anchor by content pattern instead of block name
      * @return bool|WP_Error Success or error
      */
-    public static function insert_block($template_id, $block_name, $block_attributes = array(), $position = 'append', $anchor_block_name = '') {
+    public static function insert_block($template_id, $block_name, $block_attributes = array(), $position = 'append', $anchor_block_name = '', $search_by_content = false) {
         // Get the template
         $template = self::get_template($template_id);
         if (!$template) {
@@ -45,10 +46,10 @@ class Maloney_Listings_Toolset_Template_Blocks {
             'innerBlocks' => array(),
         );
         
-        // If it's a shortcode block, set the innerContent
-        if ($block_name === 'core/shortcode') {
-            // We'll need to handle this differently - shortcode blocks need the shortcode in innerContent
-            // This will be handled by the caller or we need to pass it as an attribute
+        // If it's a shortcode block, we need the shortcode content
+        // This should be passed via $block_attributes['shortcode'] or handled by caller
+        if ($block_name === 'core/shortcode' && isset($block_attributes['shortcode'])) {
+            $new_block['innerContent'] = array($block_attributes['shortcode']);
         }
         
         // Insert block based on position
@@ -65,14 +66,14 @@ class Maloney_Listings_Toolset_Template_Blocks {
                 if (empty($anchor_block_name)) {
                     return new WP_Error('anchor_required', __('Anchor block name required for "before" position.', 'maloney-listings'));
                 }
-                $blocks = self::insert_block_before($blocks, $new_block, $anchor_block_name);
+                $blocks = self::insert_block_before_recursive($blocks, $new_block, $anchor_block_name, $search_by_content);
                 break;
                 
             case 'after':
                 if (empty($anchor_block_name)) {
                     return new WP_Error('anchor_required', __('Anchor block name required for "after" position.', 'maloney-listings'));
                 }
-                $blocks = self::insert_block_after($blocks, $new_block, $anchor_block_name);
+                $blocks = self::insert_block_after_recursive($blocks, $new_block, $anchor_block_name, $search_by_content);
                 break;
                 
             case 'replace':
@@ -333,6 +334,15 @@ class Maloney_Listings_Toolset_Template_Blocks {
                         $matches = true;
                     }
                 }
+                elseif ($search_pattern === 'current-condo-listings-table' || stripos($search_pattern, 'condo-listings-table') !== false) {
+                    if ($field_name_in_content === 'current-condo-listings-table') {
+                        $matches = true;
+                    } elseif (!empty($raw_html_check) && preg_match('/\[types[^\]]*field=[\'"]?current-condo-listings-table[\'"]?[^\]]*\]/i', $raw_html_check)) {
+                        $matches = true;
+                    } elseif (!empty($block_content) && preg_match('/\[types[^\]]*field=[\'"]?current-condo-listings-table[\'"]?[^\]]*\]/i', $block_content)) {
+                        $matches = true;
+                    }
+                }
                 // For other patterns, use generic matching but still be careful
                 elseif (!empty($search_pattern)) {
                     // Check extracted field name first (most precise)
@@ -372,6 +382,10 @@ class Maloney_Listings_Toolset_Template_Blocks {
                     if (stripos($block_content, 'vacancy-table') !== false) {
                         $matches = true;
                     }
+                } elseif ($old_block_lower === 'current-condo-listings-table' || stripos($old_block_lower, 'condo-listings-table') !== false) {
+                    if (stripos($block_content, 'current-condo-listings-table') !== false) {
+                        $matches = true;
+                    }
                 } elseif (stripos($old_block_lower, 'vacancy') !== false && stripos($old_block_lower, 'availability') === false) {
                     // If searching for "vacancy" (but not "availability"), match only "vacancy-table"
                     if (stripos($block_content, 'vacancy-table') !== false) {
@@ -390,10 +404,12 @@ class Maloney_Listings_Toolset_Template_Blocks {
             if (!$matches && !empty($block_content) && (!isset($block['blockName']) || $block['blockName'] !== 'core/shortcode')) {
                 $old_block_lower = strtolower(trim($old_block_name));
                 
-                // Only match specific patterns, not generic "availability"
                 if ($old_block_lower === 'vacancy-table' || stripos($old_block_lower, 'vacancy-table') !== false) {
-                    // Match only "vacancy-table"
                     if (stripos($block_content, 'vacancy-table') !== false) {
+                        $matches = true;
+                    }
+                } elseif ($old_block_lower === 'current-condo-listings-table' || stripos($old_block_lower, 'condo-listings-table') !== false) {
+                    if (stripos($block_content, 'current-condo-listings-table') !== false) {
                         $matches = true;
                     }
                 } elseif (stripos($old_block_lower, 'current rental availability') !== false) {
@@ -623,34 +639,77 @@ class Maloney_Listings_Toolset_Template_Blocks {
      * Find block index in blocks array
      * 
      * @param array $blocks Blocks array
-     * @param string $block_name Block name to find
+     * @param string $block_name Block name to find, or content pattern (e.g., "neighborhood")
+     * @param bool $search_by_content If true, search by content pattern instead of block name
      * @return int|false Index or false if not found
      */
-    public static function find_block_index($blocks, $block_name) {
+    public static function find_block_index($blocks, $block_name, $search_by_content = false) {
         foreach ($blocks as $index => $block) {
-            if (isset($block['blockName']) && $block['blockName'] === $block_name) {
-                return $index;
+            // If searching by content pattern
+            if ($search_by_content) {
+                $block_content = '';
+                
+                // Get content from innerHTML
+                if (isset($block['innerHTML'])) {
+                    $block_content = $block['innerHTML'];
+                }
+                // Get content from innerContent array
+                elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                    $block_content = implode('', $block['innerContent']);
+                }
+                // Get content from first innerContent element
+                elseif (isset($block['innerContent'][0])) {
+                    $block_content = $block['innerContent'][0];
+                }
+                
+                // Check if content contains the pattern (case-insensitive)
+                if (!empty($block_content) && stripos($block_content, $block_name) !== false) {
+                    return $index;
+                }
+                
+                // Also check for Toolset field shortcodes
+                if (preg_match('/\[types[^\]]*field=[\'"]?([^\'"\]]+)[\'"]?[^\]]*\]/i', $block_content, $matches)) {
+                    $field_name = strtolower(trim($matches[1]));
+                    if ($field_name === strtolower(trim($block_name))) {
+                        return $index;
+                    }
+                }
+            } else {
+                // Search by block name
+                if (isset($block['blockName']) && $block['blockName'] === $block_name) {
+                    return $index;
+                }
+            }
+            
+            // Search in inner blocks recursively
+            if (!empty($block['innerBlocks'])) {
+                $inner_index = self::find_block_index($block['innerBlocks'], $block_name, $search_by_content);
+                if ($inner_index !== false) {
+                    // Return a path or handle nested blocks differently
+                    // For now, we'll search recursively at the top level
+                }
             }
         }
         
         return false;
     }
     
+    
     /**
-     * Insert block before anchor block
+     * Insert block after anchor block (recursive version)
      * 
      * @param array $blocks Blocks array
      * @param array $new_block Block to insert
-     * @param string $anchor_block_name Anchor block name
+     * @param string $anchor_block_name Anchor block name or content pattern
+     * @param bool $search_by_content If true, search by content pattern instead of block name
      * @return array Modified blocks array
      */
-    private static function insert_block_before($blocks, $new_block, $anchor_block_name) {
-        $index = self::find_block_index($blocks, $anchor_block_name);
+    private static function insert_block_after_recursive($blocks, $new_block, $anchor_block_name, $search_by_content = false) {
+        $found = false;
+        $blocks = self::insert_block_after_recursive_helper($blocks, $new_block, $anchor_block_name, $search_by_content, $found);
         
-        if ($index !== false) {
-            array_splice($blocks, $index, 0, array($new_block));
-        } else {
-            // If anchor not found, append
+        // If anchor not found, append
+        if (!$found) {
             $blocks[] = $new_block;
         }
         
@@ -658,24 +717,81 @@ class Maloney_Listings_Toolset_Template_Blocks {
     }
     
     /**
-     * Insert block after anchor block
+     * Helper function to recursively insert block after anchor
      * 
      * @param array $blocks Blocks array
      * @param array $new_block Block to insert
-     * @param string $anchor_block_name Anchor block name
+     * @param string $anchor_block_name Anchor block name or content pattern
+     * @param bool $search_by_content If true, search by content pattern
+     * @param bool $found Reference to track if anchor was found
      * @return array Modified blocks array
      */
-    private static function insert_block_after($blocks, $new_block, $anchor_block_name) {
-        $index = self::find_block_index($blocks, $anchor_block_name);
-        
-        if ($index !== false) {
-            array_splice($blocks, $index + 1, 0, array($new_block));
-        } else {
-            // If anchor not found, append
-            $blocks[] = $new_block;
+    private static function insert_block_after_recursive_helper($blocks, $new_block, $anchor_block_name, $search_by_content, &$found) {
+        foreach ($blocks as $index => $block) {
+            $matches = false;
+            
+            if ($search_by_content) {
+                // Search by content pattern
+                $block_content = '';
+                
+                if (isset($block['innerHTML'])) {
+                    $block_content = $block['innerHTML'];
+                } elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                    $block_content = implode('', $block['innerContent']);
+                } elseif (isset($block['innerContent'][0])) {
+                    $block_content = $block['innerContent'][0];
+                }
+                
+                // Check if content contains the pattern (case-insensitive)
+                if (!empty($block_content) && stripos($block_content, $anchor_block_name) !== false) {
+                    $matches = true;
+                }
+                
+                // Also check for Toolset field shortcodes
+                if (!$matches && preg_match('/\[types[^\]]*field=[\'"]?([^\'"\]]+)[\'"]?[^\]]*\]/i', $block_content, $matches_field)) {
+                    $field_name = strtolower(trim($matches_field[1]));
+                    if ($field_name === strtolower(trim($anchor_block_name))) {
+                        $matches = true;
+                    }
+                }
+            } else {
+                // Search by block name
+                if (isset($block['blockName']) && $block['blockName'] === $anchor_block_name) {
+                    $matches = true;
+                }
+            }
+            
+            if ($matches) {
+                // Found the anchor block - insert after it
+                array_splice($blocks, $index + 1, 0, array($new_block));
+                $found = true;
+                return $blocks;
+            }
+            
+            // Search in inner blocks
+            if (!empty($block['innerBlocks'])) {
+                $block['innerBlocks'] = self::insert_block_after_recursive_helper($block['innerBlocks'], $new_block, $anchor_block_name, $search_by_content, $found);
+                $blocks[$index] = $block;
+                if ($found) {
+                    return $blocks;
+                }
+            }
         }
         
         return $blocks;
+    }
+    
+    /**
+     * Insert block after anchor block (non-recursive, for backward compatibility)
+     * 
+     * @param array $blocks Blocks array
+     * @param array $new_block Block to insert
+     * @param string $anchor_block_name Anchor block name or content pattern
+     * @param bool $search_by_content If true, search by content pattern instead of block name
+     * @return array Modified blocks array
+     */
+    private static function insert_block_after($blocks, $new_block, $anchor_block_name, $search_by_content = false) {
+        return self::insert_block_after_recursive($blocks, $new_block, $anchor_block_name, $search_by_content);
     }
     
     /**
@@ -733,14 +849,16 @@ class Maloney_Listings_Toolset_Template_Blocks {
      * @param string $block_name Block name
      * @param array $block_attributes Block attributes
      * @param string $position Position to insert
+     * @param string $anchor_block_name Optional anchor block name or content pattern
+     * @param bool $search_by_content If true, search anchor by content pattern
      * @return array Results array with success/error for each template
      */
-    public static function insert_block_for_post_type($post_type, $block_name, $block_attributes = array(), $position = 'append') {
+    public static function insert_block_for_post_type($post_type, $block_name, $block_attributes = array(), $position = 'append', $anchor_block_name = '', $search_by_content = false) {
         $templates = self::get_templates_for_post_type($post_type);
         $results = array();
         
         foreach ($templates as $template_id) {
-            $result = self::insert_block($template_id, $block_name, $block_attributes, $position);
+            $result = self::insert_block($template_id, $block_name, $block_attributes, $position, $anchor_block_name, $search_by_content);
             $results[$template_id] = is_wp_error($result) ? $result : true;
         }
         
@@ -748,7 +866,311 @@ class Maloney_Listings_Toolset_Template_Blocks {
     }
     
     /**
+     * Insert map block after neighborhood block in all listing templates
+     * 
+     * @param bool $all_templates If true, process all Toolset Content Templates, not just those assigned to listing post type
+     * @return array Results array with success/error for each template
+     */
+    public static function insert_map_after_neighborhood($all_templates = false) {
+        if ($all_templates) {
+            // Get ALL Toolset Content Templates
+            $templates_query = new WP_Query(array(
+                'post_type' => 'view-template',
+                'posts_per_page' => -1,
+                'post_status' => 'publish',
+                'orderby' => 'title',
+                'order' => 'ASC',
+            ));
+            $templates = array();
+            if ($templates_query->have_posts()) {
+                while ($templates_query->have_posts()) {
+                    $templates_query->the_post();
+                    $templates[] = get_the_ID();
+                }
+                wp_reset_postdata();
+            }
+        } else {
+            // Get only templates assigned to listing post type
+            $templates = self::get_templates_for_post_type('listing');
+        }
+        
+        $results = array();
+        
+        foreach ($templates as $template_id) {
+            $template = self::get_template($template_id);
+            if (!$template) {
+                $results[$template_id] = new WP_Error('template_not_found', __('Template not found.', 'maloney-listings'));
+                continue;
+            }
+            
+            // Check if map block already exists (check for both shortcode and existing map divs)
+            $blocks = self::get_blocks($template_id);
+            if (!is_wp_error($blocks)) {
+                $has_map = false;
+                
+                // Recursively check all blocks for map
+                $check_for_map = function($blocks) use (&$check_for_map, &$has_map) {
+                    foreach ($blocks as $block) {
+                        // Check for map shortcode
+                        if (isset($block['blockName']) && $block['blockName'] === 'core/shortcode') {
+                            $content = '';
+                            if (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                                $content = implode('', $block['innerContent']);
+                            } elseif (isset($block['innerContent'][0])) {
+                                $content = $block['innerContent'][0];
+                            }
+                            if (stripos($content, 'maloney_listing_map') !== false || 
+                                stripos($content, 'listing-single-map') !== false) {
+                                $has_map = true;
+                                return;
+                            }
+                        }
+                        
+                        // Check for existing map div in HTML
+                        if (isset($block['innerHTML'])) {
+                            if (stripos($block['innerHTML'], 'listing-single-map') !== false ||
+                                stripos($block['innerHTML'], 'id="listing-map') !== false ||
+                                (stripos($block['innerHTML'], 'class="listing-map') !== false && 
+                                 stripos($block['innerHTML'], 'data-lat') !== false)) {
+                                $has_map = true;
+                                return;
+                            }
+                        }
+                        
+                        // Check inner blocks
+                        if (!empty($block['innerBlocks'])) {
+                            $check_for_map($block['innerBlocks']);
+                            if ($has_map) return;
+                        }
+                    }
+                };
+                
+                $check_for_map($blocks);
+                
+                if ($has_map) {
+                    $results[$template_id] = new WP_Error('block_exists', __('Map block already exists in this template.', 'maloney-listings'));
+                    continue;
+                }
+            }
+            
+            // Insert map block after neighborhood TEXT block (not the heading)
+            // Look for blocks containing neighborhood description text patterns
+            $result = self::insert_block_after_neighborhood_text($template_id, 'core/shortcode', array('shortcode' => '[maloney_listing_map height="400"]'));
+            
+            // If insertion failed, try appending instead
+            if (is_wp_error($result) && $result->get_error_code() === 'anchor_not_found') {
+                // Neighborhood text block not found - append to end
+                $result = self::insert_block($template_id, 'core/shortcode', array('shortcode' => '[maloney_listing_map height="400"]'), 'append');
+            }
+            
+            $results[$template_id] = is_wp_error($result) ? $result : true;
+        }
+        
+        return $results;
+    }
+    
+    /**
+     * Insert block after the neighborhood text block (after the description, not the heading)
+     * 
+     * @param int|string $template_id Template ID
+     * @param string $block_name Block name to insert
+     * @param array $block_attributes Block attributes
+     * @return bool|WP_Error
+     */
+    private static function insert_block_after_neighborhood_text($template_id, $block_name, $block_attributes = array()) {
+        $template = self::get_template($template_id);
+        if (!$template) {
+            return new WP_Error('template_not_found', __('Template not found.', 'maloney-listings'));
+        }
+        
+        $blocks = parse_blocks($template->post_content);
+        if (empty($blocks)) {
+            return new WP_Error('no_blocks', __('Template has no blocks.', 'maloney-listings'));
+        }
+        
+        // Create new block
+        $new_block = array(
+            'blockName' => $block_name,
+            'attrs' => $block_attributes,
+            'innerContent' => array(),
+            'innerBlocks' => array(),
+        );
+        
+        // If it's a shortcode block, set the innerContent
+        if ($block_name === 'core/shortcode' && isset($block_attributes['shortcode'])) {
+            $new_block['innerContent'] = array($block_attributes['shortcode']);
+        }
+        
+        // Patterns that indicate neighborhood description text (not just the heading)
+        $neighborhood_text_patterns = array(
+            'residents at',
+            'enjoy a central location',
+            'thriving',
+            'medical area',
+            'steps from',
+            'world class hospitals',
+            'brigham',
+            'children\'s hospital',
+            'harvard medical',
+            'longwood',
+        );
+        
+        // Strategy: Find the "NEIGHBORHOOD" heading, then find the next text block after it
+        $neighborhood_heading_index = -1;
+        $insert_after_index = -1;
+        $found = false;
+        
+        // Toolset blocks heading data attribute (consistent across templates)
+        $toolset_neighborhood_heading_id = '6cd577bebf8ea4bf960b67a0baa44753';
+        
+        // First pass: Find the neighborhood heading
+        // Option 1: Search for specific Toolset data attribute (most reliable)
+        foreach ($blocks as $index => $block) {
+            $block_content = '';
+            
+            if (isset($block['innerHTML'])) {
+                $block_content = $block['innerHTML'];
+            } elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                $block_content = implode('', $block['innerContent']);
+            } elseif (isset($block['innerContent'][0])) {
+                $block_content = $block['innerContent'][0];
+            }
+            
+            // Primary method: Check for specific Toolset data attribute
+            if (stripos($block_content, 'data-toolset-blocks-heading="' . $toolset_neighborhood_heading_id . '"') !== false) {
+                // Verify it's a heading (must have <h tag or tb-heading class)
+                if (stripos($block_content, '<h') !== false || stripos($block_content, 'tb-heading') !== false) {
+                    $neighborhood_heading_index = $index;
+                    break;
+                }
+            }
+        }
+        
+        // Fallback: If data attribute not found, use text-based search (must be in heading)
+        if ($neighborhood_heading_index < 0) {
+            foreach ($blocks as $index => $block) {
+                $block_content = '';
+                
+                if (isset($block['innerHTML'])) {
+                    $block_content = $block['innerHTML'];
+                } elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                    $block_content = implode('', $block['innerContent']);
+                } elseif (isset($block['innerContent'][0])) {
+                    $block_content = $block['innerContent'][0];
+                }
+                
+                // Look for "NEIGHBORHOOD" text (case-insensitive)
+                if (stripos($block_content, 'neighborhood') !== false) {
+                    // CRITICAL: Must be a heading - check for heading tags/classes first
+                    // This ensures we never match "neighborhood" text within a paragraph
+                    $is_heading = (
+                        stripos($block_content, '<h') !== false || 
+                        stripos($block_content, 'tb-heading') !== false ||
+                        (stripos($block['blockName'] ?? '', 'heading') !== false)
+                    );
+                    
+                    // Only proceed if it's confirmed to be a heading
+                    if ($is_heading) {
+                        // Additional check: verify it contains "NEIGHBORHOOD" as the main text
+                        if (preg_match('/NEIGHBORHOOD/i', $block_content)) {
+                            $neighborhood_heading_index = $index;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Second pass: If we found the heading, look for the next substantial text block after it
+        if ($neighborhood_heading_index >= 0) {
+            // Start searching from the block after the heading
+            for ($i = $neighborhood_heading_index + 1; $i < count($blocks); $i++) {
+                $block = $blocks[$i];
+                $block_content = '';
+                
+                // Get block content
+                if (isset($block['innerHTML'])) {
+                    $block_content = $block['innerHTML'];
+                } elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                    $block_content = implode('', $block['innerContent']);
+                } elseif (isset($block['innerContent'][0])) {
+                    $block_content = $block['innerContent'][0];
+                }
+                
+                // Skip empty blocks
+                $clean_content = strip_tags($block_content);
+                $clean_content = trim($clean_content);
+                
+                if (empty($clean_content)) {
+                    continue;
+                }
+                
+                // Skip if it's another heading
+                if (stripos($block_content, '<h') !== false && 
+                    (stripos($block_content, 'FEATURES') !== false || 
+                     stripos($block_content, 'AMENITIES') !== false ||
+                     stripos($block_content, 'AVAILABILITY') !== false)) {
+                    // We've hit the next section, stop here
+                    break;
+                }
+                
+                // Check if this block contains description text patterns OR is a substantial text block
+                $has_description_text = false;
+                foreach ($neighborhood_text_patterns as $pattern) {
+                    if (stripos($block_content, $pattern) !== false || stripos($clean_content, $pattern) !== false) {
+                        $has_description_text = true;
+                        break;
+                    }
+                }
+                
+                // Check if it's a paragraph or text block
+                $is_text_block = (
+                    stripos($block['blockName'] ?? '', 'paragraph') !== false ||
+                    stripos($block['blockName'] ?? '', 'text') !== false ||
+                    stripos($block['blockName'] ?? '', 'toolset') !== false ||
+                    stripos($block_content, '<p') !== false
+                );
+                
+                // If it's a substantial text block (more than 100 characters), use it
+                // OR if it has description text and is more than 30 characters
+                if (strlen($clean_content) > 100) {
+                    // Substantial text block - insert after it
+                    $insert_after_index = $i;
+                    $found = true;
+                    // Continue to find the LAST such block (in case there are multiple paragraphs)
+                } elseif ($has_description_text && strlen($clean_content) > 30) {
+                    // Has description text and is substantial
+                    $insert_after_index = $i;
+                    $found = true;
+                }
+            }
+        }
+        
+        // If we found a block to insert after, do it
+        if ($found && $insert_after_index >= 0) {
+            // Insert after the found block
+            array_splice($blocks, $insert_after_index + 1, 0, array($new_block));
+            
+            // Serialize and update
+            $new_content = serialize_blocks($blocks);
+            return self::update_template_content($template_id, $new_content);
+        }
+        
+        // Fallback: If we found the heading but no text block, insert right after the heading
+        if ($neighborhood_heading_index >= 0 && !$found) {
+            array_splice($blocks, $neighborhood_heading_index + 1, 0, array($new_block));
+            $new_content = serialize_blocks($blocks);
+            return self::update_template_content($template_id, $new_content);
+        }
+        
+        return new WP_Error('anchor_not_found', __('Neighborhood text block not found in template.', 'maloney-listings'));
+    }
+    
+    /**
      * Get all template IDs for a post type
+     * 
+     * This gets all Toolset Content Templates that are assigned to the post type,
+     * including default templates, conditional templates, and any custom templates.
      * 
      * @param string $post_type Post type slug
      * @return array Array of template IDs
@@ -780,8 +1202,21 @@ class Maloney_Listings_Toolset_Template_Blocks {
             }
         }
         
-        // Remove duplicates
-        $template_ids = array_unique($template_ids);
+        // Also get ALL published Content Templates (view-template post type)
+        // This ensures we catch any custom templates that might be used
+        $all_templates = get_posts(array(
+            'post_type' => 'view-template',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+        ));
+        
+        if (!empty($all_templates)) {
+            $template_ids = array_merge($template_ids, $all_templates);
+        }
+        
+        // Remove duplicates and ensure all are integers
+        $template_ids = array_unique(array_map('intval', $template_ids));
         
         return $template_ids;
     }
@@ -799,6 +1234,81 @@ class Maloney_Listings_Toolset_Template_Blocks {
             'innerContent' => array($shortcode),
             'innerBlocks' => array(),
         );
+    }
+    
+    public static function replace_ninja_table_3596($post_type = 'listing', $dry_run = false) {
+        $templates = self::get_templates_for_post_type($post_type);
+        $results = array();
+        $replacement_shortcode = '[maloney_listing_condo_listings]';
+        
+        foreach ($templates as $template_id) {
+            if ($dry_run) {
+                $blocks = self::get_blocks($template_id);
+                if (is_wp_error($blocks)) {
+                    $results[$template_id] = array(
+                        'success' => false,
+                        'error' => $blocks->get_error_message(),
+                        'replaced' => false,
+                    );
+                    continue;
+                }
+                
+                $found = false;
+                self::check_for_pattern_recursive($blocks, 'current-condo-listings-table', $found);
+                
+                $results[$template_id] = array(
+                    'success' => true,
+                    'found' => $found,
+                    'replaced' => false,
+                );
+            } else {
+                $result = self::replace_block(
+                    $template_id,
+                    'current-condo-listings-table',
+                    'core/shortcode',
+                    array(),
+                    $replacement_shortcode
+                );
+                
+                if (is_wp_error($result)) {
+                    $results[$template_id] = array(
+                        'success' => false,
+                        'error' => $result->get_error_message(),
+                        'replaced' => false,
+                    );
+                } else {
+                    $results[$template_id] = array(
+                        'success' => true,
+                        'replaced' => $result,
+                    );
+                }
+            }
+        }
+        
+        return $results;
+    }
+    
+    private static function check_for_pattern_recursive($blocks, $pattern, &$found) {
+        foreach ($blocks as $block) {
+            $block_content = '';
+            if (isset($block['innerHTML'])) {
+                $block_content = $block['innerHTML'];
+            } elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                $block_content = implode('', $block['innerContent']);
+            }
+            
+            if (stripos($block_content, $pattern) !== false) {
+                $found = true;
+                return;
+            }
+            
+            if (!empty($block['innerBlocks'])) {
+                self::check_for_pattern_recursive($block['innerBlocks'], $pattern, $found);
+                if ($found) {
+                    return;
+                }
+            }
+        }
     }
     
     /**

@@ -10,8 +10,12 @@ get_header(); ?>
 
 <div id="main-content">
     <div class="container">
-        <div id="content-area" class="clearfix">
-            <div id="left-area">
+      
+        <!-- Back to Results / View Listings link - will be populated by JavaScript -->
+        <div class="back-to-results-container" style="margin: 10px 0 20px 20px;"></div>
+        
+        <div id="content-area" class="clearfix listing-with-sidebar">
+            <div id="left-area" class="listing-main-content">
                 
                 <?php while (have_posts()) : the_post(); ?>
                     <?php
@@ -21,12 +25,15 @@ get_header(); ?>
                     $location = get_the_terms($post_id, 'location');
                     $amenities = get_the_terms($post_id, 'amenities');
                     
-                    // Determine if this is a rental
+                    // Determine if this is a rental or condo
                     $is_rental = false;
+                    $is_condo = false;
                     if ($listing_type && !is_wp_error($listing_type)) {
                         $type_slug = strtolower($listing_type[0]->slug);
                         if (strpos($type_slug, 'rental') !== false) {
                             $is_rental = true;
+                        } elseif (strpos($type_slug, 'condo') !== false || strpos($type_slug, 'condominium') !== false) {
+                            $is_condo = true;
                         }
                     }
                     
@@ -202,15 +209,6 @@ get_header(); ?>
                             <?php the_content(); ?>
                         </div>
                         
-                        <?php if ($latitude && $longitude) : ?>
-                            <?php $type_slug = ($listing_type && !is_wp_error($listing_type)) ? strtolower($listing_type[0]->slug) : ''; ?>
-                            <div class="listing-map" id="listing-single-map" data-lat="<?php echo esc_attr($latitude); ?>" data-lng="<?php echo esc_attr($longitude); ?>" data-type="<?php echo esc_attr($type_slug); ?>" data-address="<?php echo esc_attr($address); ?>" style="height: 400px; width: 100%; margin: 30px 0;"></div>
-                            <?php
-                                // Note: Directions and Street View buttons are now added as map controls via JavaScript
-                                // They appear on top of the map near the zoom controls
-                            ?>
-                        <?php endif; ?>
-                        
                         <?php if ($listing_status && !is_wp_error($listing_status) && $listing_status[0]->slug !== 'available') : ?>
                             <div class="vacancy-notification-form">
                                 <h3><?php _e('Notify Me When Available', 'maloney-listings'); ?></h3>
@@ -233,28 +231,31 @@ get_header(); ?>
                                 </form>
                             </div>
                         <?php endif; ?>
+                        
+                        <?php 
+                        // Show condo listings table for condo properties (only for current property)
+                        if ($is_condo) {
+                            echo '<div class="listing-condo-listings-section" style="margin-top: 40px; padding-top: 40px; border-top: 2px solid #eee;">';
+                            echo do_shortcode('[maloney_listing_condo_listings title="Current Condo Listings" property_id="' . $post_id . '"]');
+                            echo '</div>';
+                        }
+                        ?>
                             
                         </article>
-                        
-                        <!-- Similar Properties -->
-                        <div class="similar-properties">
-                            <h2><?php _e('Similar Properties', 'maloney-listings'); ?></h2>
-                            <div class="similar-slider-controls" style="text-align:right; margin:6px 0; padding-right: 12px;">
-                                <button type="button" id="similar-prev" class="button">&#8592;</button>
-                                <button type="button" id="similar-next" class="button">&#8594;</button>
-                            </div>
-                            <div id="similar-listings" class="similar-slider">
-                                <?php
-                                // Load similar listings via AJAX
-                                ?>
-                                <div class="loading"><?php _e('Loading similar properties...', 'maloney-listings'); ?></div>
-                            </div>
-                            <div id="similar-dots" class="similar-dots" aria-hidden="true"></div>
-                        </div>
                     </div>
                     
                 <?php endwhile; ?>
                 
+            </div>
+            
+            <!-- Sidebar for Similar Properties -->
+            <div id="listing-sidebar" class="listing-sidebar">
+                <div class="similar-properties-sidebar">
+                    <h2><?php _e('Similar Properties', 'maloney-listings'); ?></h2>
+                    <div id="similar-listings" class="similar-listings-vertical">
+                        <div class="loading"><?php _e('Loading similar properties...', 'maloney-listings'); ?></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

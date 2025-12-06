@@ -15,6 +15,8 @@ class Maloney_Listings_Toolset_Integration {
     
     public function __construct() {
         add_action('admin_menu', array($this, 'add_admin_page'));
+        // Hook into admin_init to redirect before any output is sent
+        add_action('admin_init', array($this, 'maybe_redirect_assign_groups'));
     }
     
     /**
@@ -56,7 +58,26 @@ class Maloney_Listings_Toolset_Integration {
         );
     }
     
+    /**
+     * Redirect before any output is sent (using load-{hook} action)
+     */
+    public function maybe_redirect_assign_groups() {
+        // Check if we're on the assign-toolset-groups page
+        if (isset($_GET['page']) && $_GET['page'] === 'assign-toolset-groups' && isset($_GET['post_type']) && $_GET['post_type'] === 'listing') {
+            // Check if user is developer
+            if (!$this->is_developer()) {
+                wp_die(__('You do not have permission to access this page.', 'maloney-listings'));
+            }
+            
+            // Redirect users directly to Toolset's native assignment page
+            // This avoids any potential issues with Toolset's internal metadata handling
+            wp_safe_redirect(admin_url('admin.php?page=types-custom-fields'));
+            exit;
+        }
+    }
+    
     public function render_admin_page() {
+        // This should not be reached if redirect works, but keep as fallback
         // Check if user is developer
         if (!$this->is_developer()) {
             wp_die(__('You do not have permission to access this page.', 'maloney-listings'));

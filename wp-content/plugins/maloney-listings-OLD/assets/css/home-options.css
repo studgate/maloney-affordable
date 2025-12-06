@@ -1,0 +1,93 @@
+/**
+ * Home Page Listing Options Styles
+ */
+
+.home-listing-option {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.home-listing-option:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.home-listing-option .option-header {
+    padding: 15px 20px;
+    color: white;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.home-listing-option.condo-color .option-header {
+    background-color: #26a69a; /* Teal */
+}
+
+.home-listing-option.rental-color .option-header {
+    background-color: #a0522d; /* Reddish-brown */
+}
+
+.home-listing-option.units-color .option-header {
+    background-color: #1976d2; /* Blue */
+}
+
+.home-listing-option .option-image {
+    width: 100%;
+    height: 250px;
+    overflow: hidden;
+}
+
+.home-listing-option .option-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.home-listing-option .option-description {
+    padding: 20px;
+}
+
+.home-listing-option .option-description p {
+    margin: 0;
+    color: #333;
+    line-height: 1.6;
+}
+
+.home-listing-option .option-button {
+    padding: 0 20px 20px;
+}
+
+.home-listing-option .option-button .button {
+    display: inline-block;
+    padding: 12px 30px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: bold;
+    text-align: center;
+    transition: opacity 0.3s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.home-listing-option.condo-color .option-button .button {
+    background-color: #26a69a;
+    color: white;
+}
+
+.home-listing-option.rental-color .option-button .button {
+    background-color: #a0522d;
+    color: white;
+}
+
+.home-listing-option.units-color .option-button .button {
+    background-color: #1976d2;
+    color: white;
+}
+
+.home-listing-option .option-button .button:hover {
+    opacity: 0.9;
+}
+

@@ -423,16 +423,21 @@ $accessible = get_post_meta($post_id, 'wpcf-accessible', true);
                 $badge_class .= ' badge-rental';
             }
             
-            // Get total available units for rental badge
+            // Get total available units for badge (both rentals and condos)
             $total_available_for_badge = 0;
-            if ($is_rental && class_exists('Maloney_Listings_Available_Units_Fields')) {
+            if (class_exists('Maloney_Listings_Available_Units_Fields')) {
                 $total_available_for_badge = Maloney_Listings_Available_Units_Fields::get_total_available($post_id);
+            }
+            // Also check for condo listings
+            if (class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+                $condo_total = Maloney_Listings_Condo_Listings_Fields::get_total_available($post_id);
+                $total_available_for_badge += $condo_total;
             }
         ?>
             <span class="listing-card-badge <?php echo esc_attr($badge_class); ?>">
                 <?php echo esc_html($type_name); ?>
             </span>
-            <?php if ($is_rental && $total_available_for_badge > 0) : ?>
+            <?php if ($total_available_for_badge > 0) : ?>
                 <span class="available-units-badge" style="position: absolute; top: 12px; right: 12px; background: rgba(110, 204, 57, 1); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; z-index: 10; white-space: nowrap;">
                     <strong><?php echo esc_html($total_available_for_badge); ?></strong> <?php echo $total_available_for_badge === 1 ? __('unit available', 'maloney-listings') : __('units available', 'maloney-listings'); ?>
                 </span>
@@ -515,7 +520,17 @@ $accessible = get_post_meta($post_id, 'wpcf-accessible', true);
                 <?php if ($show_waitlist_prefix) : ?>
                     Waitlist <?php echo esc_html($waitlist_status); ?>
                 <?php else : ?>
-                    <?php echo esc_html($waitlist_status); ?>
+                    <?php 
+                    // Replace status text with "First Come, First Served" or "Lottery"
+                    $display_status = esc_html($waitlist_status);
+                    $status_lower = strtolower($display_status);
+                    if (stripos($status_lower, 'first come') !== false || stripos($status_lower, 'fcfs') !== false) {
+                        $display_status = 'First Come, First Served';
+                    } elseif (stripos($status_lower, 'lottery') !== false) {
+                        $display_status = 'Lottery';
+                    }
+                    echo $display_status;
+                    ?>
                 <?php endif; ?>
             </strong>
         </div>
@@ -566,10 +581,15 @@ $accessible = get_post_meta($post_id, 'wpcf-accessible', true);
                         foreach ($units_by_type as $type => $data) {
                             // Use the full text if it has additional info, otherwise use type (count) format
                             if (strpos($data['display_text'], '(') !== false) {
-                                // If it already has parentheses, try to make the count bold
-                                $display_parts[] = preg_replace('/\((\d+)\)/', '(<strong>$1</strong>)', $data['display_text']);
+                                // If it already has parentheses, clean up any spaces before closing paren and make the count bold
+                                // First, remove ALL spaces before closing parentheses globally
+                                $cleaned_text = preg_replace('/\s+\)/', ')', $data['display_text']);
+                                // Then, find and bold the number in parentheses (match the last set with a number)
+                                // Pattern: find (number) at the end or before the end
+                                $cleaned_text = preg_replace('/\((\d+)\)/', '(<strong>$1</strong>)', $cleaned_text);
+                                $display_parts[] = $cleaned_text;
                             } else {
-                                // Format: "1-Bedroom (1)" with bold count
+                                // Format: "1-Bedroom (1)" with bold count - no space before closing paren
                                 $display_parts[] = $type . ' (<strong>' . $data['count'] . '</strong>)';
                             }
                         }
@@ -685,6 +705,77 @@ $accessible = get_post_meta($post_id, 'wpcf-accessible', true);
                             <?php
                         }
                     }
+                }
+            }
+        } elseif ($is_condo) {
+            // For condos, show current condo listings with detailed breakdown
+            if (class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+                $condo_listings_data = Maloney_Listings_Condo_Listings_Fields::get_condo_listings_data($post_id);
+                $total_condo_available = Maloney_Listings_Condo_Listings_Fields::get_total_available($post_id);
+                
+                if ($total_condo_available > 0) {
+                    // Group by unit type and sum counts
+                    $units_by_type = array();
+                    foreach ($condo_listings_data as $entry) {
+                        if (!empty($entry['bedrooms']) && !empty($entry['units_available'])) {
+                            $unit_type = $entry['bedrooms'];
+                            $units_text = $entry['units_available'];
+                            
+                            // Extract count for summing
+                            $count = 0;
+                            if (preg_match('/(\d+)/', $units_text, $matches)) {
+                                $count = intval($matches[1]);
+                            } else {
+                                $count = intval($units_text);
+                            }
+                            
+                            if ($count > 0) {
+                                if (!isset($units_by_type[$unit_type])) {
+                                    $units_by_type[$unit_type] = array(
+                                        'count' => 0,
+                                        'display_text' => $units_text, // Keep original text for display
+                                    );
+                                }
+                                $units_by_type[$unit_type]['count'] += $count;
+                                // Keep the most descriptive text (one with parentheses)
+                                if (strpos($units_text, '(') !== false) {
+                                    $units_by_type[$unit_type]['display_text'] = $units_text;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!empty($units_by_type)) {
+                        $display_parts = array();
+                        foreach ($units_by_type as $type => $data) {
+                            // Use the full text if it has additional info, otherwise use type (count) format
+                            if (strpos($data['display_text'], '(') !== false) {
+                                // If it already has parentheses, clean up any spaces before closing paren and make the count bold
+                                $cleaned_text = preg_replace('/\s+\)/', ')', $data['display_text']);
+                                $cleaned_text = preg_replace('/\((\d+)\)/', '(<strong>$1</strong>)', $cleaned_text);
+                                $display_parts[] = $cleaned_text;
+                            } else {
+                                // Format: "1-Bedroom (1)" with bold count
+                                $display_parts[] = $type . ' (<strong>' . $data['count'] . '</strong>)';
+                            }
+                        }
+                        ?>
+                        <div class="available-units">
+                            <strong><?php _e('Current Condo Listings:', 'maloney-listings'); ?></strong>
+                            <span class="unit-types">
+                                <?php echo implode(', ', $display_parts); ?>
+                            </span>
+                        </div>
+                        <?php
+                    }
+                } else {
+                    // Show "No available units" for condos with no availability
+                    ?>
+                    <div class="available-units">
+                        <strong><?php _e('Current Condo Listings:', 'maloney-listings'); ?></strong>
+                        <span class="unit-types"><?php _e('No available units', 'maloney-listings'); ?></span>
+                    </div>
+                    <?php
                 }
             }
         } elseif (!empty($available_units)) {

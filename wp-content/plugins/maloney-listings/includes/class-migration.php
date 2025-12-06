@@ -412,6 +412,20 @@ class Maloney_Listings_Migration {
                         $value = maybe_unserialize($value);
                     }
                     
+                    // Consolidate city formats during migration
+                    // Normalize "Boston / Fenway", "Boston | Fenway", "Boston/ Fenway" to "Boston | Fenway"
+                    if ($old_field === 'wpcf-city' || $new_field === '_listing_city' || $old_field === '_listing_city') {
+                        if (is_string($value)) {
+                            // Replace "/" with "|" and normalize spacing
+                            $value = preg_replace('/\s*\/\s*/', ' | ', $value);
+                            // Normalize multiple spaces around "|"
+                            $value = preg_replace('/\s*\|\s*/', ' | ', $value);
+                            // Remove extra spaces
+                            $value = preg_replace('/\s+/', ' ', $value);
+                            $value = trim($value);
+                        }
+                    }
+                    
                     update_post_meta($new_post_id, $new_field, $value);
                     break; // Found it, move on
                 }
@@ -457,6 +471,26 @@ class Maloney_Listings_Migration {
             
             // Preserve ALL wpcf- fields (Toolset Types fields) - this is essential!
             if (strpos($key, 'wpcf-') === 0) {
+                // Consolidate city formats during migration
+                // Normalize "Boston / Fenway", "Boston | Fenway", "Boston/ Fenway" to "Boston | Fenway"
+                if ($key === 'wpcf-city') {
+                    if (is_array($values)) {
+                        foreach ($values as $idx => $v) {
+                            if (is_string($v)) {
+                                $v = preg_replace('/\s*\/\s*/', ' | ', $v);
+                                $v = preg_replace('/\s*\|\s*/', ' | ', $v);
+                                $v = preg_replace('/\s+/', ' ', $v);
+                                $values[$idx] = trim($v);
+                            }
+                        }
+                    } elseif (is_string($values)) {
+                        $values = preg_replace('/\s*\/\s*/', ' | ', $values);
+                        $values = preg_replace('/\s*\|\s*/', ' | ', $values);
+                        $values = preg_replace('/\s+/', ' ', $values);
+                        $values = trim($values);
+                    }
+                }
+                
                 if (is_array($values) && count($values) > 1) {
                     // Multiple values - store all
                     delete_post_meta($new_post_id, $key);

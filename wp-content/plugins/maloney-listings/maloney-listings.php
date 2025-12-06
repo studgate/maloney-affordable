@@ -49,6 +49,8 @@ require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-settings.php';
 require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-template-migration.php';
 require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-available-units-migration.php';
 require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-available-units-fields.php';
+require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-condo-listings-fields.php';
+require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-condo-listings-migration.php';
 require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-zip-code-extraction.php';
 require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-toolset-template-blocks.php';
 require_once MALONEY_LISTINGS_PLUGIN_DIR . 'includes/class-template-tools.php';

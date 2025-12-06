@@ -63,6 +63,10 @@ class Maloney_Listings_Admin {
         add_action('add_meta_boxes', array($this, 'add_availability_meta_box'));
         add_action('save_post_listing', array($this, 'save_availability_meta_box'), 10, 2);
         
+        // Add condo listings meta box to listing edit page
+        add_action('add_meta_boxes', array($this, 'add_condo_listings_meta_box'));
+        add_action('save_post_listing', array($this, 'save_condo_listings_meta_box'), 10, 2);
+        
         // Add description under title in listings admin page
         add_action('admin_notices', array($this, 'add_listings_page_description'));
         
@@ -187,6 +191,8 @@ class Maloney_Listings_Admin {
         
         // Add "Current Availability" under "Add New Listing" using admin_menu filter
         add_action('admin_menu', array($this, 'add_current_availability_menu'), 100);
+        // Add "Current Condo Listings" under "Add New Listing" using admin_menu filter
+        add_action('admin_menu', array($this, 'add_current_condo_listings_menu'), 100);
         
         add_submenu_page(
             'edit.php?post_type=listing',
@@ -196,6 +202,18 @@ class Maloney_Listings_Admin {
             'migrate-available-units',
             array($this, 'render_available_units_migration_page')
         );
+        
+        // Migrate Condo Listings - Developer only
+        if ($this->is_developer()) {
+            add_submenu_page(
+                'edit.php?post_type=listing',
+                __('Migrate Condo Listings', 'maloney-listings'),
+                __('Migrate Condo Listings', 'maloney-listings'),
+                'manage_options',
+                'migrate-condo-listings',
+                array($this, 'render_condo_listings_migration_page')
+            );
+        }
 
         // Removed: Index Health, Debug Listing, and Diagnostics pages (development tools, not needed in production)
     }
@@ -218,6 +236,28 @@ class Maloney_Listings_Admin {
                 'add-current-availability',
                 array($this, 'render_add_availability_page'),
                 2 // Position after "Add New"
+            );
+        }
+    }
+    
+    /**
+     * Add Current Condo Listings menu item under "Add New Listing"
+     */
+    public function add_current_condo_listings_menu() {
+        global $submenu;
+        
+        // Find the "Add New" menu item for listing post type
+        $parent_slug = 'edit.php?post_type=listing';
+        if (isset($submenu[$parent_slug])) {
+            // Add after "Current Availability" (usually position 3)
+            add_submenu_page(
+                $parent_slug,
+                __('Current Condo Listings', 'maloney-listings'),
+                __('Current Condo Listings', 'maloney-listings'),
+                'manage_options',
+                'add-current-condo-listings',
+                array($this, 'render_add_condo_listings_page'),
+                3 // Position after "Current Availability"
             );
         }
     }
@@ -351,9 +391,75 @@ class Maloney_Listings_Admin {
         if ($post_type !== 'listing') return;
         // Listing Type
         $this->render_admin_tax_filter('listing_type', __('Type', 'maloney-listings'));
-        // Status filter removed per user request
+        // Status filter
+        $this->render_status_filter();
         // Has Units (Current Availability) filter
         $this->render_has_units_filter();
+    }
+    
+    private function render_status_filter() {
+        $selected = isset($_GET['listing_status_filter']) ? sanitize_text_field($_GET['listing_status_filter']) : '';
+        
+        // Get all unique status values from both rentals and condos
+        $statuses = array();
+        
+        // Rental statuses
+        $rental_statuses = array(
+            '1' => 'Active Rental',
+            '2' => 'Open Lottery',
+            '3' => 'Closed Lottery',
+            '4' => 'Inactive Rental',
+            '5' => 'Custom Lottery',
+            '6' => 'Upcoming Lottery',
+        );
+        
+        // Condo statuses
+        $condo_statuses = array(
+            '1' => 'FCFS Condo Sales',
+            '2' => 'Active Condo Lottery',
+            '3' => 'Closed Condo Lottery',
+            '4' => 'Inactive Condo Property',
+            '5' => 'Upcoming Condo',
+        );
+        
+        // Combine and deduplicate by display name
+        $all_statuses = array();
+        foreach ($rental_statuses as $value => $label) {
+            $all_statuses['rental_' . $value] = $label;
+        }
+        foreach ($condo_statuses as $value => $label) {
+            // Only add if not already in the list (some statuses might be similar)
+            if (!in_array($label, $all_statuses)) {
+                $all_statuses['condo_' . $value] = $label;
+            } else {
+                // If similar status exists, combine them
+                $key = array_search($label, $all_statuses);
+                if ($key) {
+                    $all_statuses[$key . ',condo_' . $value] = $label;
+                }
+            }
+        }
+        
+        echo '<label class="screen-reader-text" for="filter_listing_status">' . __('Status', 'maloney-listings') . '</label>';
+        echo '<select id="filter_listing_status" name="listing_status_filter">';
+        echo '<option value="">' . __('All Statuses', 'maloney-listings') . '</option>';
+        
+        // Group by type for better organization
+        echo '<optgroup label="' . esc_attr__('Rental Statuses', 'maloney-listings') . '">';
+        foreach ($rental_statuses as $value => $label) {
+            $option_value = 'rental_' . $value;
+            printf('<option value="%s" %s>%s</option>', esc_attr($option_value), selected($selected, $option_value, false), esc_html($label));
+        }
+        echo '</optgroup>';
+        
+        echo '<optgroup label="' . esc_attr__('Condo Statuses', 'maloney-listings') . '">';
+        foreach ($condo_statuses as $value => $label) {
+            $option_value = 'condo_' . $value;
+            printf('<option value="%s" %s>%s</option>', esc_attr($option_value), selected($selected, $option_value, false), esc_html($label));
+        }
+        echo '</optgroup>';
+        
+        echo '</select>';
     }
     
     private function render_has_units_filter() {
@@ -386,13 +492,40 @@ class Maloney_Listings_Admin {
         global $pagenow;
         if (!is_admin() || $pagenow !== 'edit.php') return;
         if (!isset($query->query_vars['post_type']) || $query->query_vars['post_type'] !== 'listing') return;
-        // Only filter by listing_type (status filter removed)
+        
+        // Filter by listing_type
         if (!empty($_GET['listing_type'])) {
             $term = sanitize_text_field($_GET['listing_type']);
             $tax_query = isset($query->query_vars['tax_query']) ? $query->query_vars['tax_query'] : array();
             $tax_query[] = array('taxonomy'=>'listing_type','field'=>'slug','terms'=>$term);
             $tax_query['relation'] = 'AND';
             $query->set('tax_query', $tax_query);
+        }
+        
+        // Filter by status
+        if (!empty($_GET['listing_status_filter'])) {
+            $status_filter = sanitize_text_field($_GET['listing_status_filter']);
+            
+            // Parse the filter value (format: rental_1, condo_2, etc.)
+            if (strpos($status_filter, 'rental_') === 0) {
+                $status_value = str_replace('rental_', '', $status_filter);
+                $meta_query = isset($query->query_vars['meta_query']) ? $query->query_vars['meta_query'] : array();
+                $meta_query[] = array(
+                    'key' => 'wpcf-status',
+                    'value' => $status_value,
+                    'compare' => '='
+                );
+                $query->set('meta_query', $meta_query);
+            } elseif (strpos($status_filter, 'condo_') === 0) {
+                $status_value = str_replace('condo_', '', $status_filter);
+                $meta_query = isset($query->query_vars['meta_query']) ? $query->query_vars['meta_query'] : array();
+                $meta_query[] = array(
+                    'key' => 'wpcf-condo-status',
+                    'value' => $status_value,
+                    'compare' => '='
+                );
+                $query->set('meta_query', $meta_query);
+            }
         }
         
         // Filter by has units (current availability) - handled in modify_query_for_has_units_filter
@@ -523,7 +656,7 @@ class Maloney_Listings_Admin {
     
     public function enqueue_admin_assets($hook) {
         // Management/Geocode pages
-        if (strpos($hook, 'listings-management') !== false || strpos($hook, 'vacancy-notifications') !== false || strpos($hook, 'geocode-addresses') !== false || strpos($hook, 'add-current-availability') !== false) {
+        if (strpos($hook, 'listings-management') !== false || strpos($hook, 'vacancy-notifications') !== false || strpos($hook, 'geocode-addresses') !== false || strpos($hook, 'add-current-availability') !== false || strpos($hook, 'migrate-condo-listings') !== false) {
             wp_enqueue_style('maloney-listings-admin', MALONEY_LISTINGS_PLUGIN_URL . 'assets/css/admin.css', array(), MALONEY_LISTINGS_VERSION);
             wp_enqueue_script('maloney-listings-admin', MALONEY_LISTINGS_PLUGIN_URL . 'assets/js/admin.js', array('jquery'), MALONEY_LISTINGS_VERSION, true);
             
@@ -1542,6 +1675,538 @@ class Maloney_Listings_Admin {
         <?php
     }
     
+    /**
+     * Render the Current Condo Listings admin page
+     * Similar to render_add_availability_page but for condos
+     */
+    public function render_add_condo_listings_page() {
+        if (!current_user_can('manage_options')) {
+            wp_die('You do not have permission to access this page.');
+        }
+        
+        $message = '';
+        $message_type = 'info';
+        $selected_property_id = isset($_GET['property_id']) ? intval($_GET['property_id']) : 0;
+        $add_new = isset($_GET['add_new']) ? true : false;
+        $selected_property = null;
+        
+        if ($selected_property_id) {
+            $selected_property = get_post($selected_property_id);
+            if (!$selected_property || $selected_property->post_type !== 'listing') {
+                $selected_property = null;
+                $selected_property_id = 0;
+            }
+        }
+        
+        
+        // Handle form submission
+        if (isset($_POST['save_condo_listings']) && check_admin_referer('save_condo_listings_action', 'save_condo_listings_nonce')) {
+            $property_id = isset($_POST['property_id']) ? intval($_POST['property_id']) : 0;
+            
+            if ($property_id) {
+                // Get existing condo listing entries
+                $entries = isset($_POST['condo_listings']) && is_array($_POST['condo_listings']) ? $_POST['condo_listings'] : array();
+                
+                // Clear existing repetitive field values
+                delete_post_meta($property_id, 'wpcf-condo-listings-property');
+                delete_post_meta($property_id, 'wpcf-condo-listings-town');
+                delete_post_meta($property_id, 'wpcf-condo-listings-bedrooms');
+                delete_post_meta($property_id, 'wpcf-condo-listings-bathrooms');
+                delete_post_meta($property_id, 'wpcf-condo-listings-price');
+                delete_post_meta($property_id, 'wpcf-condo-listings-income-limit');
+                delete_post_meta($property_id, 'wpcf-condo-listings-type');
+                delete_post_meta($property_id, 'wpcf-condo-listings-units-available');
+                delete_post_meta($property_id, 'wpcf-condo-listings-accessible-units');
+                delete_post_meta($property_id, 'wpcf-condo-listings-view-apply');
+                
+                // Get property data for auto-fill
+                $property = get_post($property_id);
+                $property_town = get_post_meta($property_id, 'wpcf-city', true);
+                if (empty($property_town)) {
+                    $property_town = get_post_meta($property_id, '_listing_city', true);
+                }
+                $property_link = get_permalink($property_id);
+                
+                // Save new entries
+                foreach ($entries as $entry) {
+                    if (empty($entry['bedrooms']) || empty($entry['units_available'])) {
+                        continue; // Skip incomplete entries
+                    }
+                    
+                    // Auto-fill property, town, and link
+                    add_post_meta($property_id, 'wpcf-condo-listings-property', $property_id);
+                    add_post_meta($property_id, 'wpcf-condo-listings-town', !empty($entry['town']) ? sanitize_text_field($entry['town']) : $property_town);
+                    add_post_meta($property_id, 'wpcf-condo-listings-bedrooms', sanitize_text_field($entry['bedrooms']));
+                    if (!empty($entry['bathrooms'])) {
+                        add_post_meta($property_id, 'wpcf-condo-listings-bathrooms', sanitize_text_field($entry['bathrooms']));
+                    }
+                    add_post_meta($property_id, 'wpcf-condo-listings-price', sanitize_text_field($entry['price']));
+                    add_post_meta($property_id, 'wpcf-condo-listings-income-limit', sanitize_text_field($entry['income_limit']));
+                    add_post_meta($property_id, 'wpcf-condo-listings-type', sanitize_text_field($entry['type']));
+                    add_post_meta($property_id, 'wpcf-condo-listings-units-available', intval($entry['units_available']));
+                    add_post_meta($property_id, 'wpcf-condo-listings-accessible-units', sanitize_textarea_field($entry['accessible_units']));
+                    add_post_meta($property_id, 'wpcf-condo-listings-view-apply', esc_url_raw(!empty($entry['view_apply']) ? $entry['view_apply'] : $property_link));
+                }
+                
+                $message = sprintf(__('Condo listings data saved for %s', 'maloney-listings'), $property->post_title);
+                $message_type = 'success';
+                $selected_property_id = $property_id;
+                $selected_property = $property;
+            }
+        }
+        
+        // Get all condo listing entries
+        $all_condo_listings = array();
+        if (class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+            if ($selected_property_id) {
+                // Get entries for selected property only
+                $all_condo_listings = Maloney_Listings_Condo_Listings_Fields::get_condo_listings_data($selected_property_id);
+            } else {
+                // Get all entries from all properties
+                $all_condo_listings = Maloney_Listings_Condo_Listings_Fields::get_all_condo_listings_entries();
+            }
+        }
+        
+        // Sort entries: default by property name, then by date posted
+        usort($all_condo_listings, function($a, $b) {
+            // First sort by property name
+            $prop_a = isset($a['property']) ? strtolower($a['property']) : '';
+            $prop_b = isset($b['property']) ? strtolower($b['property']) : '';
+            if ($prop_a !== $prop_b) {
+                return strcmp($prop_a, $prop_b);
+            }
+            // If same property, sort by source_post_id (which relates to post date)
+            $id_a = isset($a['source_post_id']) ? $a['source_post_id'] : (isset($a['property_id']) ? $a['property_id'] : 0);
+            $id_b = isset($b['source_post_id']) ? $b['source_post_id'] : (isset($b['property_id']) ? $b['property_id'] : 0);
+            return $id_b - $id_a; // Newer first
+        });
+        
+        // Get all condo properties for autocomplete
+        $all_condo_properties = get_posts(array(
+            'post_type' => 'listing',
+            'posts_per_page' => -1,
+            'post_status' => 'publish',
+            'tax_query' => array(
+                array(
+                    'taxonomy' => 'listing_type',
+                    'field' => 'slug',
+                    'terms' => array('condo', 'condominium', 'condominiums'),
+                ),
+            ),
+            'orderby' => 'title',
+            'order' => 'ASC',
+        ));
+        
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Current Condo Listings', 'maloney-listings'); ?></h1>
+            
+            <?php if ($message) : ?>
+                <div class="notice notice-<?php echo esc_attr($message_type); ?> is-dismissible">
+                    <p><?php echo esc_html($message); ?></p>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (!$selected_property_id && !$add_new) : ?>
+                <div class="card" style="max-width: 100% !important; margin-top: 20px; margin-bottom: 20px;">
+                    <p><?php _e('To migrate condo listings from Ninja Table 3596, go to', 'maloney-listings'); ?> <a href="<?php echo admin_url('edit.php?post_type=listing&page=migrate-condo-listings'); ?>"><?php _e('Listings → Migrate Condo Listings', 'maloney-listings'); ?></a></p>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($add_new && !$selected_property_id) : ?>
+                <div class="card" style="max-width: 100% !important; margin-top: 20px;">
+                    <h2><?php _e('Select Property to Add Condo Listing', 'maloney-listings'); ?></h2>
+                    <p>
+                        <label for="property_autocomplete_new"><?php _e('Search Property:', 'maloney-listings'); ?></label><br>
+                        <input type="text" id="property_autocomplete_new" placeholder="<?php _e('Type to search...', 'maloney-listings'); ?>" style="width: 500px; padding: 8px 12px; font-size: 14px;">
+                        <input type="hidden" id="selected_property_id_new" value="">
+                    </p>
+                    <p class="description"><?php _e('Search for a condo property to add listing entries. Start typing to see matching properties.', 'maloney-listings'); ?></p>
+                </div>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    // Prepare property data for autocomplete
+                    var properties = [
+                        <?php 
+                        foreach ($all_condo_properties as $prop) : 
+                            $town = get_post_meta($prop->ID, 'wpcf-city', true);
+                            if (empty($town)) {
+                                $town = get_post_meta($prop->ID, '_listing_city', true);
+                            }
+                            $label = $prop->post_title;
+                            if ($town) {
+                                $label .= ' (' . $town . ')';
+                            }
+                        ?>
+                        {
+                            label: '<?php echo esc_js($label); ?>',
+                            value: '<?php echo esc_js($prop->post_title); ?>',
+                            id: <?php echo $prop->ID; ?>,
+                            town: '<?php echo esc_js($town); ?>'
+                        },
+                        <?php endforeach; ?>
+                    ];
+                    
+                    // Autocomplete for new entry property search
+                    $('#property_autocomplete_new').autocomplete({
+                        source: function(request, response) {
+                            var term = request.term.toLowerCase();
+                            var matches = properties.filter(function(item) {
+                                return item.label.toLowerCase().indexOf(term) !== -1 || 
+                                       item.value.toLowerCase().indexOf(term) !== -1 ||
+                                       (item.town && item.town.toLowerCase().indexOf(term) !== -1);
+                            });
+                            response(matches);
+                        },
+                        minLength: 1,
+                        select: function(event, ui) {
+                            event.preventDefault();
+                            $('#selected_property_id_new').val(ui.item.id);
+                            window.location.href = '<?php echo admin_url('edit.php?post_type=listing&page=add-current-condo-listings'); ?>&property_id=' + ui.item.id;
+                        }
+                    });
+                    
+                    // Also handle Enter key on new autocomplete
+                    $('#property_autocomplete_new').on('keydown', function(e) {
+                        if (e.keyCode === 13) {
+                            e.preventDefault();
+                            var selectedId = $('#selected_property_id_new').val();
+                            if (selectedId) {
+                                window.location.href = '<?php echo admin_url('edit.php?post_type=listing&page=add-current-condo-listings'); ?>&property_id=' + selectedId;
+                            }
+                        }
+                    });
+                });
+                </script>
+            <?php else : ?>
+                <div class="card" style="max-width: 100% !important; margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin: 0;"><?php _e('Filter by Property', 'maloney-listings'); ?></h2>
+                        <a href="<?php echo admin_url('edit.php?post_type=listing&page=add-current-condo-listings&add_new=1'); ?>" class="button button-primary" style="margin-left: auto;"><?php _e('+ Add New Condo Listing', 'maloney-listings'); ?></a>
+                    </div>
+                    <p>
+                        <label for="property_autocomplete"><?php _e('Search Property:', 'maloney-listings'); ?></label><br>
+                        <input type="text" id="property_autocomplete" placeholder="<?php _e('Type to search...', 'maloney-listings'); ?>" style="width: 500px; padding: 8px 12px; font-size: 14px;">
+                        <input type="hidden" id="selected_property_id" value="<?php echo esc_attr($selected_property_id); ?>">
+                        <a href="<?php echo admin_url('edit.php?post_type=listing&page=add-current-condo-listings'); ?>" class="button" style="margin-left: 10px;"><?php _e('Show All', 'maloney-listings'); ?></a>
+                    </p>
+                    <p class="description" style="margin-top: 8px; font-style: italic; color: #666;">
+                        <?php _e('Search for a property to filter the condo listing entries below. To add a new condo listing entry for a property, click the "+ Add New Condo Listing" button above.', 'maloney-listings'); ?>
+                    </p>
+                </div>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    // Prepare property data for autocomplete (for filter field)
+                    var properties = [
+                        <?php 
+                        foreach ($all_condo_properties as $prop) : 
+                            $town = get_post_meta($prop->ID, 'wpcf-city', true);
+                            if (empty($town)) {
+                                $town = get_post_meta($prop->ID, '_listing_city', true);
+                            }
+                            $label = $prop->post_title;
+                            if ($town) {
+                                $label .= ' (' . $town . ')';
+                            }
+                        ?>
+                        {
+                            label: '<?php echo esc_js($label); ?>',
+                            value: '<?php echo esc_js($prop->post_title); ?>',
+                            id: <?php echo $prop->ID; ?>,
+                            town: '<?php echo esc_js($town); ?>'
+                        },
+                        <?php endforeach; ?>
+                    ];
+                    
+                    // Autocomplete for property search (filter view) - always initialize if field exists
+                    if ($('#property_autocomplete').length) {
+                        $('#property_autocomplete').autocomplete({
+                            source: function(request, response) {
+                                var term = request.term.toLowerCase();
+                                var matches = properties.filter(function(item) {
+                                    return item.label.toLowerCase().indexOf(term) !== -1 || 
+                                           item.value.toLowerCase().indexOf(term) !== -1 ||
+                                           (item.town && item.town.toLowerCase().indexOf(term) !== -1);
+                                });
+                                response(matches);
+                            },
+                            minLength: 1,
+                            select: function(event, ui) {
+                                $('#selected_property_id').val(ui.item.id);
+                                window.location.href = '<?php echo admin_url('edit.php?post_type=listing&page=add-current-condo-listings'); ?>&property_id=' + ui.item.id;
+                            }
+                        });
+                    }
+                });
+                </script>
+            <?php endif; ?>
+            
+            <div class="card" style="margin-top: 20px; overflow-x: auto; width: 100% !important; max-width: 100% !important;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;"><?php echo $selected_property ? esc_html($selected_property->post_title) . ' - ' : ''; ?><?php _e('All Condo Listing Entries', 'maloney-listings'); ?> (<?php echo count($all_condo_listings); ?>)</h2>
+                </div>
+                
+                <?php if (!empty($all_condo_listings)) : ?>
+                    <table class="fixed wp-list-table widefat striped condo-listings-table" style="border-collapse: collapse; width: 100%; table-layout: auto;">
+                        <thead>
+                            <tr style="background: #f0f0f1;">
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Property', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Town', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Unit Size', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Price', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Income Limit', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Type', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: center; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Units Available', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #c3c4c7; font-weight: 600; max-width: 300px;"><?php _e('Accessible Units', 'maloney-listings'); ?></th>
+                                <th style="padding: 12px; text-align: center; border-bottom: 2px solid #c3c4c7; font-weight: 600;"><?php _e('Actions', 'maloney-listings'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($all_condo_listings as $entry) : 
+                                $property_id = isset($entry['source_post_id']) ? $entry['source_post_id'] : (isset($entry['property_id']) ? $entry['property_id'] : 0);
+                                if (empty($entry['property']) && $property_id) {
+                                    $prop = get_post($property_id);
+                                    $entry['property'] = $prop ? $prop->post_title : '';
+                                }
+                            ?>
+                                <tr style="border-bottom: 1px solid #c3c4c7;">
+                                    <td style="padding: 12px; font-weight: 600;">
+                                        <?php 
+                                        $entry_property_link = '';
+                                        if ($property_id) {
+                                            $entry_property_link = get_permalink($property_id);
+                                        } elseif (!empty($entry['view_apply'])) {
+                                            $entry_property_link = $entry['view_apply'];
+                                        }
+                                        if (!empty($entry_property_link)) : ?>
+                                            <strong><a href="<?php echo esc_url($entry_property_link); ?>" target="_blank" style="color: #2271b1; text-decoration: none;"><?php echo esc_html($entry['property']); ?></a></strong>
+                                        <?php else : ?>
+                                            <strong style="color: #2271b1;"><?php echo esc_html($entry['property']); ?></strong>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="padding: 12px;"><?php echo esc_html($entry['town']); ?></td>
+                                    <td style="padding: 12px;"><?php echo esc_html($entry['bedrooms']); ?></td>
+                                    <td style="padding: 12px;"><?php echo $entry['price'] ? '$' . number_format(floatval($entry['price']), 0) : '<span style="color: #999;">—</span>'; ?></td>
+                                    <td style="padding: 12px;"><?php echo !empty($entry['income_limit']) ? esc_html($entry['income_limit']) : '<span style="color: #999;">—</span>'; ?></td>
+                                    <td style="padding: 12px;"><?php echo !empty($entry['type']) ? esc_html($entry['type']) : '<span style="color: #999;">—</span>'; ?></td>
+                                    <td style="padding: 12px; text-align: center;"><strong style="color: #2271b1; font-size: 16px;"><?php echo esc_html($entry['units_available']); ?></strong></td>
+                                    <td style="padding: 12px; max-width: 300px; word-wrap: break-word; font-size: 13px; line-height: 1.4;"><?php echo !empty($entry['accessible_units']) && $entry['accessible_units'] !== '0' ? esc_html($entry['accessible_units']) : '0'; ?></td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <div style="display: flex; gap: 5px; justify-content: center; flex-wrap: wrap;">
+                                            <a href="<?php echo admin_url('edit.php?post_type=listing&page=add-current-condo-listings&property_id=' . $property_id); ?>" class="button button-small"><?php _e('Edit', 'maloney-listings'); ?></a>
+                                            <?php if (!empty($entry['view_apply'])) : ?>
+                                                <a href="<?php echo esc_url($entry['view_apply']); ?>" target="_blank" class="button button-small"><?php _e('View', 'maloney-listings'); ?></a>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php else : ?>
+                    <p><?php _e('No condo listing entries found.', 'maloney-listings'); ?></p>
+                <?php endif; ?>
+            </div>
+            
+            <?php if ($selected_property) : 
+                $property_town = get_post_meta($selected_property_id, 'wpcf-city', true);
+                if (empty($property_town)) {
+                    $property_town = get_post_meta($selected_property_id, '_listing_city', true);
+                }
+                $property_link = get_permalink($selected_property_id);
+            ?>
+                <div class="card" style="max-width: 1200px; margin-top: 20px;">
+                    <h2><?php echo esc_html($selected_property->post_title); ?> - <?php _e('Current Condo Listings', 'maloney-listings'); ?></h2>
+                    <p><strong><?php _e('Property:', 'maloney-listings'); ?></strong> <?php echo esc_html($selected_property->post_title); ?></p>
+                    <p><strong><?php _e('Town:', 'maloney-listings'); ?></strong> <?php echo esc_html($property_town); ?></p>
+                    <p><strong><?php _e('Link:', 'maloney-listings'); ?></strong> <a href="<?php echo esc_url($property_link); ?>" target="_blank"><?php echo esc_html($property_link); ?></a></p>
+                    
+                    <form method="post" action="">
+                        <?php wp_nonce_field('save_condo_listings_action', 'save_condo_listings_nonce'); ?>
+                        <input type="hidden" name="property_id" value="<?php echo esc_attr($selected_property_id); ?>">
+                        
+                        <div id="condo_listings_entries">
+                            <?php if (!empty($all_condo_listings)) : ?>
+                                <?php foreach ($all_condo_listings as $index => $entry) : ?>
+                                    <div class="condo-listing-entry" style="border: 1px solid #ddd; margin: 10px 0; background: #f9f9f9;">
+                                        <h3 style="margin: 0; padding: 15px; background: #e5e5e5; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;" class="entry-header">
+                                            <span style="display: flex; align-items: center; gap: 10px;">
+                                                <span class="entry-toggle" style="font-size: 12px; color: #666;">▼</span>
+                                                <?php _e('Entry', 'maloney-listings'); ?> #<?php echo ($index + 1); ?>
+                                            </span>
+                                            <button type="button" class="button remove-entry" style="margin: 0;"><?php _e('Remove', 'maloney-listings'); ?></button>
+                                        </h3>
+                                        <div class="entry-content" style="padding: 15px; display: block;">
+                                        <table class="form-table">
+                                            <tr>
+                                                <th><label><?php _e('Town', 'maloney-listings'); ?></label></th>
+                                                <td><input type="text" name="condo_listings[<?php echo $index; ?>][town]" value="<?php echo esc_attr($entry['town']); ?>" placeholder="City | Neighborhood" style="width: 100%;"></td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Unit Size', 'maloney-listings'); ?></label></th>
+                                                <td>
+                                                    <select name="condo_listings[<?php echo $index; ?>][bedrooms]" required>
+                                                        <option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>
+                                                        <?php
+                                                        $default_options = array('Studio', '1-Bedroom', '2-Bedroom', '3-Bedroom', '4-Bedroom', '4+ Bedroom', '5-Bedroom', '6-Bedroom');
+                                                        foreach ($default_options as $opt) {
+                                                            ?>
+                                                            <option value="<?php echo esc_attr($opt); ?>" <?php selected($entry['bedrooms'], $opt); ?>><?php echo esc_html($opt); ?></option>
+                                                            <?php
+                                                        }
+                                                        ?>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Bathrooms', 'maloney-listings'); ?></label></th>
+                                                <td>
+                                                    <select name="condo_listings[<?php echo $index; ?>][bathrooms]">
+                                                        <option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>
+                                                        <option value="1" <?php selected($entry['bathrooms'], '1'); ?>>1</option>
+                                                        <option value="1.5" <?php selected($entry['bathrooms'], '1.5'); ?>>1.5</option>
+                                                        <option value="2" <?php selected($entry['bathrooms'], '2'); ?>>2</option>
+                                                        <option value="2.5" <?php selected($entry['bathrooms'], '2.5'); ?>>2.5</option>
+                                                        <option value="3" <?php selected($entry['bathrooms'], '3'); ?>>3</option>
+                                                        <option value="3.5" <?php selected($entry['bathrooms'], '3.5'); ?>>3.5</option>
+                                                        <option value="4" <?php selected($entry['bathrooms'], '4'); ?>>4</option>
+                                                        <option value="4.5" <?php selected($entry['bathrooms'], '4.5'); ?>>4.5</option>
+                                                        <option value="5+" <?php selected($entry['bathrooms'], '5+'); ?>>5+</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Price', 'maloney-listings'); ?></label></th>
+                                                <td><input type="number" name="condo_listings[<?php echo $index; ?>][price]" value="<?php echo esc_attr($entry['price']); ?>" step="0.01"></td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Income Limit (AMI %)', 'maloney-listings'); ?></label></th>
+                                                <td>
+                                                    <input type="text" name="condo_listings[<?php echo $index; ?>][income_limit]" value="<?php echo esc_attr($entry['income_limit']); ?>" placeholder="e.g., 80% or 80% (Minimum) - 100% (Maximum)" style="width: 100%;">
+                                                    <p class="description"><?php _e('Enter income limit as percentage (e.g., "80%") or range (e.g., "80% (Minimum) - 100% (Maximum)")', 'maloney-listings'); ?></p>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Type', 'maloney-listings'); ?></label></th>
+                                                <td>
+                                                    <select name="condo_listings[<?php echo $index; ?>][type]">
+                                                        <option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>
+                                                        <option value="Lottery" <?php selected($entry['type'], 'Lottery'); ?>>Lottery</option>
+                                                        <option value="FCFS" <?php selected($entry['type'], 'FCFS'); ?>>FCFS</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Units Available', 'maloney-listings'); ?></label></th>
+                                                <td><input type="number" name="condo_listings[<?php echo $index; ?>][units_available]" value="<?php echo esc_attr($entry['units_available']); ?>" min="0" required></td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Accessible Units', 'maloney-listings'); ?></label></th>
+                                                <td><textarea name="condo_listings[<?php echo $index; ?>][accessible_units]" rows="3" style="width: 100%;"><?php echo esc_textarea($entry['accessible_units']); ?></textarea></td>
+                                            </tr>
+                                            <tr>
+                                                <th><label><?php _e('Learn More Link', 'maloney-listings'); ?></label></th>
+                                                <td><input type="url" name="condo_listings[<?php echo $index; ?>][view_apply]" value="<?php echo esc_attr($entry['view_apply']); ?>" style="width: 100%;"></td>
+                                            </tr>
+                                        </table>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <p>
+                            <button type="button" id="add_entry" class="button button-primary"><?php _e('+ Add Entry', 'maloney-listings'); ?></button>
+                        </p>
+                        
+                        <p class="submit">
+                            <input type="submit" name="save_condo_listings" class="button button-primary" value="<?php _e('Save Condo Listings', 'maloney-listings'); ?>">
+                        </p>
+                    </form>
+                </div>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    // Add entry button
+                    var entryIndex = <?php echo count($all_condo_listings); ?>;
+                    $('#add_entry').on('click', function() {
+                        var newEntry = '<div class="condo-listing-entry" style="border: 1px solid #ddd; margin: 10px 0; background: #f9f9f9;">' +
+                            '<h3 style="margin: 0; padding: 15px; background: #e5e5e5; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;" class="entry-header">' +
+                            '<span style="display: flex; align-items: center; gap: 10px;">' +
+                            '<span class="entry-toggle" style="font-size: 12px; color: #666;">▼</span>' +
+                            '<?php _e('Entry', 'maloney-listings'); ?> #' + (entryIndex + 1) +
+                            '</span>' +
+                            '<button type="button" class="button remove-entry" style="margin: 0;"><?php _e('Remove', 'maloney-listings'); ?></button>' +
+                            '</h3>' +
+                            '<div class="entry-content" style="padding: 15px; display: block;">' +
+                            '<table class="form-table">' +
+                            '<tr><th><label><?php _e('Town', 'maloney-listings'); ?></label></th>' +
+                            '<td><input type="text" name="condo_listings[' + entryIndex + '][town]" placeholder="City | Neighborhood" style="width: 100%;"></td></tr>' +
+                            '<tr><th><label><?php _e('Unit Size', 'maloney-listings'); ?></label></th>' +
+                            '<td><select name="condo_listings[' + entryIndex + '][bedrooms]" required>' +
+                            '<option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>' +
+                            '<option value="Studio">Studio</option>' +
+                            '<option value="1-Bedroom">1-Bedroom</option>' +
+                            '<option value="2-Bedroom">2-Bedroom</option>' +
+                            '<option value="3-Bedroom">3-Bedroom</option>' +
+                            '<option value="4-Bedroom">4-Bedroom</option>' +
+                            '<option value="4+ Bedroom">4+ Bedroom</option>' +
+                            '<option value="5-Bedroom">5-Bedroom</option>' +
+                            '<option value="6-Bedroom">6-Bedroom</option>' +
+                            '</select></td></tr>' +
+                            '<tr><th><label><?php _e('Bathrooms', 'maloney-listings'); ?></label></th>' +
+                            '<td><select name="condo_listings[' + entryIndex + '][bathrooms]">' +
+                            '<option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>' +
+                            '<option value="1">1</option>' +
+                            '<option value="1.5">1.5</option>' +
+                            '<option value="2">2</option>' +
+                            '<option value="2.5">2.5</option>' +
+                            '<option value="3">3</option>' +
+                            '<option value="3.5">3.5</option>' +
+                            '<option value="4">4</option>' +
+                            '<option value="4.5">4.5</option>' +
+                            '<option value="5+">5+</option>' +
+                            '</select></td></tr>' +
+                            '<tr><th><label><?php _e('Price', 'maloney-listings'); ?></label></th>' +
+                            '<td><input type="number" name="condo_listings[' + entryIndex + '][price]" step="0.01"></td></tr>' +
+                            '<tr><th><label><?php _e('Income Limit (AMI %)', 'maloney-listings'); ?></label></th>' +
+                            '<td><input type="text" name="condo_listings[' + entryIndex + '][income_limit]" placeholder="e.g., 80% or 80% (Minimum) - 100% (Maximum)" style="width: 100%;"></td></tr>' +
+                            '<tr><th><label><?php _e('Type', 'maloney-listings'); ?></label></th>' +
+                            '<td><select name="condo_listings[' + entryIndex + '][type]">' +
+                            '<option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>' +
+                            '<option value="Lottery">Lottery</option>' +
+                            '<option value="FCFS">FCFS</option>' +
+                            '</select></td></tr>' +
+                            '<tr><th><label><?php _e('Units Available', 'maloney-listings'); ?></label></th>' +
+                            '<td><input type="number" name="condo_listings[' + entryIndex + '][units_available]" min="0" required></td></tr>' +
+                            '<tr><th><label><?php _e('Accessible Units', 'maloney-listings'); ?></label></th>' +
+                            '<td><textarea name="condo_listings[' + entryIndex + '][accessible_units]" rows="3" style="width: 100%;"></textarea></td></tr>' +
+                            '<tr><th><label><?php _e('Learn More Link', 'maloney-listings'); ?></label></th>' +
+                            '<td><input type="url" name="condo_listings[' + entryIndex + '][view_apply]" style="width: 100%;"></td></tr>' +
+                            '</table></div></div>';
+                        $('#condo_listings_entries').append(newEntry);
+                        entryIndex++;
+                    });
+                    
+                    // Remove entry button
+                    $(document).on('click', '.remove-entry', function() {
+                        $(this).closest('.condo-listing-entry').remove();
+                    });
+                    
+                    // Toggle entry content
+                    $(document).on('click', '.entry-header', function() {
+                        $(this).siblings('.entry-content').slideToggle();
+                        $(this).find('.entry-toggle').text($(this).find('.entry-toggle').text() === '▼' ? '▲' : '▼');
+                    });
+                });
+                </script>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+    
     public function render_available_units_migration_page() {
         if (!current_user_can('manage_options')) {
             wp_die('You do not have permission to access this page.');
@@ -1763,6 +2428,216 @@ class Maloney_Listings_Admin {
                 </ul>
                 <p><strong><?php _e('Note:', 'maloney-listings'); ?></strong> <?php _e('The flexible structure supports any unit type (Studio, 1-Bedroom, 2-Bedroom, 3-Bedroom, 4+ Bedroom, 5-Bedroom, 6-Bedroom, etc.) without needing separate fields. These fields are automatically created by the plugin and added to the "Rental Properties" field group, so they only show for rental listings.', 'maloney-listings'); ?></p>
             </div>
+        </div>
+        <?php
+    }
+    
+    /**
+     * Render the Condo Listings Migration page
+     * Similar to render_available_units_migration_page but for condos
+     */
+    public function render_condo_listings_migration_page() {
+        // Check if user is developer (restricted page)
+        if (!$this->is_developer()) {
+            wp_die('You do not have permission to access this page.');
+        }
+        
+        if (!current_user_can('manage_options')) {
+            wp_die('You do not have permission to access this page.');
+        }
+        
+        $message = '';
+        $message_type = 'info';
+        $results = null;
+        
+        // Handle clear stored results
+        if (isset($_POST['clear_migration_results']) && check_admin_referer('clear_migration_results_action', 'clear_migration_results_nonce')) {
+            delete_transient('maloney_condo_listings_migration_results');
+            $message = __('Stored migration results cleared.', 'maloney-listings');
+            $message_type = 'success';
+        }
+        
+        // Auto-create fields if they don't exist
+        if (class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+            $fields_setup = new Maloney_Listings_Condo_Listings_Fields();
+            if (!$fields_setup->fields_exist()) {
+                $fields_result = $fields_setup->create_fields();
+                if ($fields_result['success']) {
+                    if ($fields_result['created'] > 0) {
+                        $message = sprintf(
+                            __('Created %d custom fields for condo listings.', 'maloney-listings'),
+                            $fields_result['created']
+                        );
+                        $message_type = 'success';
+                    }
+                    if (!empty($fields_result['errors'])) {
+                        $message .= ' ' . implode(' ', $fields_result['errors']);
+                        if ($message_type === 'success') {
+                            $message_type = 'warning';
+                        }
+                    }
+                } else {
+                    $message = $fields_result['message'];
+                    $message_type = 'error';
+                }
+            }
+        }
+        
+        // Handle migration if form submitted
+        if (isset($_POST['migrate_condo_listings']) && check_admin_referer('migrate_condo_listings_action', 'migrate_condo_listings_nonce')) {
+            if (class_exists('Maloney_Listings_Condo_Listings_Migration')) {
+                $migration = new Maloney_Listings_Condo_Listings_Migration();
+                $results = $migration->run_migration();
+                
+                // Store results in transient (persist for 7 days)
+                set_transient('maloney_condo_listings_migration_results', $results, 7 * DAY_IN_SECONDS);
+                
+                if ($results['updated'] > 0) {
+                    $message = sprintf(
+                        __('Migration completed! Processed %d properties, updated %d listings. %d properties not found.', 'maloney-listings'),
+                        $results['processed'],
+                        $results['updated'],
+                        $results['not_found']
+                    );
+                    $message_type = 'success';
+                } else {
+                    $message = __('Migration completed but no listings were updated.', 'maloney-listings');
+                    $message_type = 'warning';
+                }
+                
+                if (!empty($results['errors'])) {
+                    $message .= ' ' . __('Some errors occurred during migration.', 'maloney-listings');
+                }
+                
+                if (!empty($results['not_imported_units'])) {
+                    $message .= ' ' . sprintf(__('%d units could not be imported. See details below.', 'maloney-listings'), count($results['not_imported_units']));
+                }
+            } else {
+                $message = __('Migration class not found.', 'maloney-listings');
+                $message_type = 'error';
+            }
+        } else {
+            // Get stored results if available (for persistence across page reloads)
+            $stored_results = get_transient('maloney_condo_listings_migration_results');
+            if ($stored_results !== false) {
+                $results = $stored_results;
+            }
+        }
+        
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Migrate Condo Listings from Ninja Table', 'maloney-listings'); ?></h1>
+            
+            <?php if ($message) : ?>
+                <div class="notice notice-<?php echo esc_attr($message_type); ?> is-dismissible">
+                    <p><?php echo esc_html($message); ?></p>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($results && !empty($results['errors'])) : ?>
+                <div class="notice notice-warning">
+                    <p><strong><?php _e('Errors:', 'maloney-listings'); ?></strong></p>
+                    <ul>
+                        <?php foreach ($results['errors'] as $error) : ?>
+                            <li><?php echo esc_html($error); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+            
+            <div class="card">
+                <h2><?php _e('Migrate Condo Listings Data', 'maloney-listings'); ?></h2>
+                <p><?php _e('This will migrate condo listings data from Ninja Table 3596 (Current Condo Listings) to the listing custom fields.', 'maloney-listings'); ?></p>
+                <p><?php _e('The migration will:', 'maloney-listings'); ?></p>
+                <ul style="list-style: disc; margin-left: 20px;">
+                    <li><?php _e('Read data from Ninja Table 3596', 'maloney-listings'); ?></li>
+                    <li><?php _e('Match properties by name', 'maloney-listings'); ?></li>
+                    <li><?php _e('Only update condo/condominium listings', 'maloney-listings'); ?></li>
+                    <li><?php _e('Create repetitive field entries for each unit', 'maloney-listings'); ?></li>
+                </ul>
+                <p><strong><?php _e('Note:', 'maloney-listings'); ?></strong> <?php _e('This migration will only update condo properties. Rentals will be skipped.', 'maloney-listings'); ?></p>
+                
+                <form method="post" action="" style="margin-top: 20px;">
+                    <?php wp_nonce_field('migrate_condo_listings_action', 'migrate_condo_listings_nonce'); ?>
+                    <input type="submit" name="migrate_condo_listings" class="button button-primary button-large" value="<?php _e('Migrate from Ninja Table 3596', 'maloney-listings'); ?>" onclick="return confirm('<?php _e('This will import all condo listings from Ninja Table 3596. Continue?', 'maloney-listings'); ?>');">
+                </form>
+            </div>
+            
+            <?php if ($results && !empty($results['not_imported_units'])) : ?>
+                <div class="card" style="margin-top: 20px; border-left: 4px solid #d63638; max-width: 100% !important;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="color: #d63638; margin: 0;"><?php _e('Units That Could Not Be Imported', 'maloney-listings'); ?> (<?php echo count($results['not_imported_units']); ?>)</h2>
+                        <form method="post" action="" style="margin: 0;">
+                            <?php wp_nonce_field('clear_migration_results_action', 'clear_migration_results_nonce'); ?>
+                            <input type="submit" name="clear_migration_results" class="button" value="<?php _e('Clear Results', 'maloney-listings'); ?>" onclick="return confirm('<?php _e('Are you sure you want to clear the stored migration results?', 'maloney-listings'); ?>');">
+                        </form>
+                    </div>
+                    <p><?php _e('The following units from Ninja Table 3596 could not be imported:', 'maloney-listings'); ?></p>
+                    <div style="overflow-x: auto; width: 100%;">
+                        <table class="wp-list-table widefat striped" style="margin-top: 15px; width: 100%; table-layout: auto;">
+                        <thead>
+                            <tr>
+                                <th style="padding: 10px; font-weight: 600;"><?php _e('Property Name (Ninja Table)', 'maloney-listings'); ?></th>
+                                <th style="padding: 10px; font-weight: 600;"><?php _e('Property Found (WordPress)', 'maloney-listings'); ?></th>
+                                <th style="padding: 10px; font-weight: 600;"><?php _e('Town', 'maloney-listings'); ?></th>
+                                <th style="padding: 10px; font-weight: 600;"><?php _e('Unit Size', 'maloney-listings'); ?></th>
+                                <th style="padding: 10px; font-weight: 600;"><?php _e('Price', 'maloney-listings'); ?></th>
+                                <th style="padding: 10px; font-weight: 600;"><?php _e('Units Available', 'maloney-listings'); ?></th>
+                                <th style="padding: 10px; font-weight: 600;"><?php _e('Reason', 'maloney-listings'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($results['not_imported_units'] as $unit) : ?>
+                                <tr>
+                                    <td style="padding: 10px;">
+                                        <strong><?php echo esc_html($unit['property']); ?></strong>
+                                    </td>
+                                    <td style="padding: 10px;">
+                                        <?php if (!empty($unit['property_found'])) : ?>
+                                            <span style="color: #2271b1;"><?php echo esc_html($unit['property_found']); ?></span>
+                                        <?php else : ?>
+                                            <span style="color: #d63638;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="padding: 10px;"><?php echo !empty($unit['town']) ? esc_html($unit['town']) : '—'; ?></td>
+                                    <td style="padding: 10px;"><?php echo esc_html($unit['bedrooms']); ?></td>
+                                    <td style="padding: 10px;"><?php echo !empty($unit['price']) ? esc_html($unit['price']) : '—'; ?></td>
+                                    <td style="padding: 10px;"><?php echo esc_html($unit['units_available']); ?></td>
+                                    <td style="padding: 10px;">
+                                        <span style="color: #d63638; font-weight: 600;">
+                                            <?php 
+                                            switch($unit['reason']) {
+                                                case 'Property not found in listings':
+                                                    _e('Property not found in listings', 'maloney-listings');
+                                                    echo '<br><small style="color: #666;">' . __('The property name in Ninja Table does not match any listing in the system. Please check the property name spelling.', 'maloney-listings') . '</small>';
+                                                    break;
+                                                case 'Property is not a condo listing':
+                                                    _e('Property is not a condo listing', 'maloney-listings');
+                                                    echo '<br><small style="color: #666;">' . __('The property exists but is not marked as a condo/condominium listing type. Go to the listing edit page and assign the correct listing type.', 'maloney-listings') . '</small>';
+                                                    break;
+                                                case 'Failed to update listing':
+                                                    _e('Failed to update listing', 'maloney-listings');
+                                                    echo '<br><small style="color: #666;">' . __('An error occurred while updating the listing. Please try again or add manually.', 'maloney-listings') . '</small>';
+                                                    break;
+                                                default:
+                                                    echo esc_html($unit['reason']);
+                                            }
+                                            ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    </div>
+                    <p style="margin-top: 15px; font-style: italic; color: #666;">
+                        <strong><?php _e('How to fix:', 'maloney-listings'); ?></strong><br>
+                        <?php _e('• If "Property not found": Check the property name in Ninja Table matches exactly with the listing title in WordPress.', 'maloney-listings'); ?><br>
+                        <?php _e('• If "Property is not a condo listing": Go to the listing edit page and ensure it has the "Condo" or "Condominium" listing type assigned.', 'maloney-listings'); ?><br>
+                        <?php _e('• After fixing, you can manually add these entries using the "Current Condo Listings" page or the meta box on the listing edit page.', 'maloney-listings'); ?>
+                    </p>
+                </div>
+            <?php endif; ?>
         </div>
         <?php
     }
@@ -2915,10 +3790,50 @@ class Maloney_Listings_Admin {
      */
     public function add_listings_page_description() {
         global $pagenow, $typenow;
-        if ($pagenow === 'edit.php' && $typenow === 'listing') {
+        
+        // Only show on main listings page (not child pages like add-current-availability, migrate-condo-listings, etc.)
+        if ($pagenow === 'edit.php' && $typenow === 'listing' && empty($_GET['page'])) {
+            // Check if there are listings needing geocoding
+            $args = array(
+                'post_type' => 'listing',
+                'posts_per_page' => -1,
+                'post_status' => 'publish',
+                'meta_query' => array(
+                    'relation' => 'OR',
+                    array(
+                        'key' => '_listing_latitude',
+                        'compare' => 'NOT EXISTS',
+                    ),
+                    array(
+                        'key' => '_listing_latitude',
+                        'value' => '',
+                        'compare' => '=',
+                    ),
+                ),
+            );
+            
+            $query = new WP_Query($args);
+            $listings_needing_geocode = $query->found_posts;
+            wp_reset_postdata();
+            
+            // Show description
             echo '<div class="notice notice-info" style="margin: 15px 0 0 0; padding: 12px 20px;">';
             echo '<p style="margin: 0; font-size: 14px;">' . __('Manage all your property listings here. Use the filters above to find specific listings by type or availability.', 'maloney-listings') . '</p>';
             echo '</div>';
+            
+            // Show geocoding notice if there are listings needing geocoding
+            if ($listings_needing_geocode > 0) {
+                $geocode_url = admin_url('edit.php?post_type=listing&page=geocode-addresses');
+                echo '<div class="notice notice-warning" style="margin: 15px 0 0 0; padding: 12px 20px;">';
+                echo '<p style="margin: 0; font-size: 14px;">';
+                printf(
+                    __('<strong>%d listing(s)</strong> still need geocoding. Go to <a href="%s">Geocode listing addresses</a> to ensure they appear correctly on the map.', 'maloney-listings'),
+                    $listings_needing_geocode,
+                    esc_url($geocode_url)
+                );
+                echo '</p>';
+                echo '</div>';
+            }
         }
     }
     
@@ -3474,6 +4389,455 @@ class Maloney_Listings_Admin {
     }
     
     /**
+     * Add condo listings meta box to listing edit page
+     * Only shows for condo properties
+     */
+    public function add_condo_listings_meta_box() {
+        global $post;
+        
+        // Only add meta box for condos
+        // Check if editing existing post
+        if ($post && $post->ID) {
+            $listing_types = wp_get_post_terms($post->ID, 'listing_type', array('fields' => 'slugs'));
+            $is_condo = false;
+            if (!empty($listing_types)) {
+                foreach ($listing_types as $type_slug) {
+                    if (stripos($type_slug, 'condo') !== false || stripos($type_slug, 'condominium') !== false) {
+                        $is_condo = true;
+                        break;
+                    }
+                }
+            }
+            
+            // For new posts, check URL parameter or unit_type field
+            if (!$is_condo && $post->post_status === 'auto-draft') {
+                $unit_type = isset($_GET['unit_type']) ? sanitize_text_field($_GET['unit_type']) : '';
+                if (empty($unit_type)) {
+                    // Check if unit_type field exists and is set
+                    $unit_type = get_post_meta($post->ID, '_listing_unit_type', true);
+                }
+                $is_condo = ($unit_type === 'condo');
+            }
+            
+            // Only add meta box if it's a condo
+            if ($is_condo) {
+                add_meta_box(
+                    'listing_condo_listings',
+                    __('Current Condo Listings', 'maloney-listings'),
+                    array($this, 'render_condo_listings_meta_box'),
+                    'listing',
+                    'normal',
+                    'high'
+                );
+            }
+        } else {
+            // For new posts, check URL parameter
+            $unit_type = isset($_GET['unit_type']) ? sanitize_text_field($_GET['unit_type']) : '';
+            if ($unit_type === 'condo') {
+                add_meta_box(
+                    'listing_condo_listings',
+                    __('Current Condo Listings', 'maloney-listings'),
+                    array($this, 'render_condo_listings_meta_box'),
+                    'listing',
+                    'normal',
+                    'high'
+                );
+            }
+        }
+    }
+    
+    /**
+     * Render the condo listings meta box
+     * Only shows for condo properties
+     */
+    public function render_condo_listings_meta_box($post) {
+        // Double-check if this is a condo property
+        $listing_types = wp_get_post_terms($post->ID, 'listing_type', array('fields' => 'slugs'));
+        $is_condo = false;
+        if (!empty($listing_types)) {
+            foreach ($listing_types as $type_slug) {
+                if (stripos($type_slug, 'condo') !== false || stripos($type_slug, 'condominium') !== false) {
+                    $is_condo = true;
+                    break;
+                }
+            }
+        }
+        
+        // For new posts, also check unit_type
+        if (!$is_condo && $post->post_status === 'auto-draft') {
+            $unit_type = isset($_GET['unit_type']) ? sanitize_text_field($_GET['unit_type']) : '';
+            if (empty($unit_type)) {
+                $unit_type = get_post_meta($post->ID, '_listing_unit_type', true);
+            }
+            $is_condo = ($unit_type === 'condo');
+        }
+        
+        if (!$is_condo) {
+            echo '<p>' . __('This meta box is only available for condo/condominium listings.', 'maloney-listings') . '</p>';
+            return;
+        }
+        
+        // Get existing condo listings data
+        $all_condo_listings = array();
+        if (class_exists('Maloney_Listings_Condo_Listings_Fields')) {
+            $all_condo_listings = Maloney_Listings_Condo_Listings_Fields::get_condo_listings_data($post->ID);
+        }
+        
+        // Get property data for auto-fill
+        $property_town = get_post_meta($post->ID, 'wpcf-city', true);
+        if (empty($property_town)) {
+            $property_town = get_post_meta($post->ID, '_listing_city', true);
+        }
+        $property_link = get_permalink($post->ID);
+        
+        wp_nonce_field('save_condo_listings_meta_box', 'condo_listings_meta_box_nonce');
+        ?>
+        <div id="condo_listings_meta_box">
+            <p class="description"><?php _e('Add current condo listings for this property. Each entry represents a unit type with available units.', 'maloney-listings'); ?></p>
+            <p>
+                <a href="<?php echo admin_url('edit.php?post_type=listing&page=add-current-condo-listings'); ?>" class="button" style="margin-left: 10px;"><?php _e('View All Condo Listings', 'maloney-listings'); ?></a>
+            </p>
+            
+            <div id="condo_listings_meta_box_entries">
+                <?php if (!empty($all_condo_listings)) : ?>
+                    <?php foreach ($all_condo_listings as $index => $entry) : ?>
+                        <div class="condo-listing-entry" style="border: 1px solid #ddd; margin: 10px 0; background: #f9f9f9;">
+                            <h3 style="margin: 0; padding: 15px; background: #e5e5e5; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;" class="entry-header">
+                                <span style="display: flex; align-items: center; gap: 10px;">
+                                    <span class="entry-toggle" style="font-size: 12px; color: #666;">▼</span>
+                                    <?php _e('Entry', 'maloney-listings'); ?> #<?php echo ($index + 1); ?>
+                                </span>
+                                <button type="button" class="button remove-entry" style="margin: 0;"><?php _e('Remove', 'maloney-listings'); ?></button>
+                            </h3>
+                            <div class="entry-content" style="padding: 15px; display: block;">
+                                <table class="form-table">
+                                    <tr>
+                                        <th><label><?php _e('Town', 'maloney-listings'); ?></label></th>
+                                        <td><input type="text" name="condo_listings[<?php echo $index; ?>][town]" value="<?php echo esc_attr($entry['town']); ?>" placeholder="City | Neighborhood" style="width: 100%;"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label><?php _e('Unit Size', 'maloney-listings'); ?></label></th>
+                                        <td>
+                                            <select name="condo_listings[<?php echo $index; ?>][bedrooms]" required>
+                                                <option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>
+                                                <?php
+                                                $options_found = false;
+                                                $saved_value = isset($entry['bedrooms']) ? $entry['bedrooms'] : '';
+                                                $found_saved_value = false;
+                                                
+                                                // Get all available unit size options from the Toolset field
+                                                if (function_exists('wpcf_admin_fields_get_fields')) {
+                                                    $fields = wpcf_admin_fields_get_fields();
+                                                    if (isset($fields['condo-listings-bedrooms']) && isset($fields['condo-listings-bedrooms']['data']['options']) && !empty($fields['condo-listings-bedrooms']['data']['options'])) {
+                                                        foreach ($fields['condo-listings-bedrooms']['data']['options'] as $key => $option) {
+                                                            $value = is_array($option) && isset($option['value']) ? $option['value'] : (is_array($option) && isset($option['title']) ? $option['title'] : $key);
+                                                            $label = is_array($option) && isset($option['title']) ? $option['title'] : (is_array($option) && isset($option['value']) ? $option['value'] : $key);
+                                                            
+                                                            if ($value === $saved_value || $label === $saved_value) {
+                                                                $found_saved_value = true;
+                                                            }
+                                                            
+                                                            ?>
+                                                            <option value="<?php echo esc_attr($value); ?>" <?php selected($entry['bedrooms'], $value); ?>><?php echo esc_html($label); ?></option>
+                                                            <?php
+                                                            $options_found = true;
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // If saved value exists but wasn't found in options, add it
+                                                if (!empty($saved_value) && !$found_saved_value) {
+                                                    ?>
+                                                    <option value="<?php echo esc_attr($saved_value); ?>" selected><?php echo esc_html($saved_value); ?></option>
+                                                    <?php
+                                                }
+                                                
+                                                // Fallback to default options if Toolset field not found or has no options
+                                                if (!$options_found) {
+                                                    $default_options = array('Studio', '1-Bedroom', '2-Bedroom', '3-Bedroom', '4-Bedroom', '4+ Bedroom', '5-Bedroom', '6-Bedroom');
+                                                    foreach ($default_options as $opt) {
+                                                        ?>
+                                                        <option value="<?php echo esc_attr($opt); ?>" <?php selected($entry['bedrooms'], $opt); ?>><?php echo esc_html($opt); ?></option>
+                                                        <?php
+                                                    }
+                                                }
+                                                ?>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label><?php _e('Bathrooms', 'maloney-listings'); ?></label></th>
+                                        <td>
+                                            <select name="condo_listings[<?php echo $index; ?>][bathrooms]">
+                                                <option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>
+                                                <option value="1" <?php selected($entry['bathrooms'], '1'); ?>>1</option>
+                                                <option value="1.5" <?php selected($entry['bathrooms'], '1.5'); ?>>1.5</option>
+                                                <option value="2" <?php selected($entry['bathrooms'], '2'); ?>>2</option>
+                                                <option value="2.5" <?php selected($entry['bathrooms'], '2.5'); ?>>2.5</option>
+                                                <option value="3" <?php selected($entry['bathrooms'], '3'); ?>>3</option>
+                                                <option value="3.5" <?php selected($entry['bathrooms'], '3.5'); ?>>3.5</option>
+                                                <option value="4" <?php selected($entry['bathrooms'], '4'); ?>>4</option>
+                                                <option value="4.5" <?php selected($entry['bathrooms'], '4.5'); ?>>4.5</option>
+                                                <option value="5+" <?php selected($entry['bathrooms'], '5+'); ?>>5+</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label><?php _e('Price', 'maloney-listings'); ?></label></th>
+                                        <td><input type="number" name="condo_listings[<?php echo $index; ?>][price]" value="<?php echo esc_attr($entry['price']); ?>" step="0.01"></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label><?php _e('Income Limit (AMI %)', 'maloney-listings'); ?></label></th>
+                                        <td>
+                                            <input type="text" name="condo_listings[<?php echo $index; ?>][income_limit]" value="<?php echo esc_attr($entry['income_limit']); ?>" placeholder="e.g., 80% or 80% (Minimum) - 100% (Maximum)" style="width: 100%;">
+                                            <p class="description"><?php _e('Enter income limit as percentage (e.g., "80%") or range (e.g., "80% (Minimum) - 100% (Maximum)")', 'maloney-listings'); ?></p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label><?php _e('Type', 'maloney-listings'); ?></label></th>
+                                        <td>
+                                            <select name="condo_listings[<?php echo $index; ?>][type]">
+                                                <option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>
+                                                <option value="Lottery" <?php selected($entry['type'], 'Lottery'); ?>>Lottery</option>
+                                                <option value="FCFS" <?php selected($entry['type'], 'FCFS'); ?>>FCFS</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><label><?php _e('Units Available', 'maloney-listings'); ?></label></th>
+                                        <td><input type="number" name="condo_listings[<?php echo $index; ?>][units_available]" value="<?php echo esc_attr($entry['units_available']); ?>" min="0" required></td>
+                                    </tr>
+                                    <tr>
+                                        <th><label><?php _e('Accessible Units', 'maloney-listings'); ?></label></th>
+                                        <td><textarea name="condo_listings[<?php echo $index; ?>][accessible_units]" rows="3" style="width: 100%;"><?php echo esc_textarea($entry['accessible_units']); ?></textarea></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+            
+            <p>
+                <button type="button" id="add_condo_listing_entry" class="button button-primary"><?php _e('+ Add Entry', 'maloney-listings'); ?></button>
+            </p>
+        </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            // Get unit size options for JavaScript
+            var unitSizeOptions = [
+                <?php
+                $unit_size_options_js = array();
+                if (function_exists('wpcf_admin_fields_get_fields')) {
+                    $fields_js = wpcf_admin_fields_get_fields();
+                    if (isset($fields_js['condo-listings-bedrooms']) && isset($fields_js['condo-listings-bedrooms']['data']['options']) && !empty($fields_js['condo-listings-bedrooms']['data']['options'])) {
+                        foreach ($fields_js['condo-listings-bedrooms']['data']['options'] as $key => $option) {
+                            $value = is_array($option) && isset($option['value']) ? $option['value'] : (is_array($option) && isset($option['title']) ? $option['title'] : $key);
+                            $label = is_array($option) && isset($option['title']) ? $option['title'] : (is_array($option) && isset($option['value']) ? $option['value'] : $key);
+                            $unit_size_options_js[] = array('value' => $value, 'label' => $label);
+                        }
+                    }
+                }
+                // Fallback to default options if Toolset field not found or has no options
+                if (empty($unit_size_options_js)) {
+                    $default_options = array('Studio', '1-Bedroom', '2-Bedroom', '3-Bedroom', '4-Bedroom', '4+ Bedroom', '5-Bedroom', '6-Bedroom');
+                    foreach ($default_options as $opt) {
+                        $unit_size_options_js[] = array('value' => $opt, 'label' => $opt);
+                    }
+                }
+                foreach ($unit_size_options_js as $opt) {
+                    echo '{value: "' . esc_js($opt['value']) . '", label: "' . esc_js($opt['label']) . '"},';
+                }
+                ?>
+            ];
+            
+            var entryIndex = <?php echo !empty($all_condo_listings) ? count($all_condo_listings) : 0; ?>;
+            
+            // Collapsible entry functionality
+            $(document).on('click', '#condo_listings_meta_box_entries .entry-header', function(e) {
+                if ($(e.target).hasClass('remove-entry') || $(e.target).closest('.remove-entry').length) {
+                    return; // Don't toggle if clicking remove button
+                }
+                var $entry = $(this).closest('.condo-listing-entry');
+                var $content = $entry.find('.entry-content');
+                var $toggle = $(this).find('.entry-toggle');
+                
+                if ($content.is(':visible')) {
+                    $content.slideUp(200);
+                    $toggle.text('▶');
+                } else {
+                    $content.slideDown(200);
+                    $toggle.text('▼');
+                }
+            });
+            
+            $('#add_condo_listing_entry').on('click', function() {
+                var entryHtml = '<div class="condo-listing-entry" style="border: 1px solid #ddd; margin: 10px 0; background: #f9f9f9;">' +
+                    '<h3 style="margin: 0; padding: 15px; background: #e5e5e5; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;" class="entry-header">' +
+                    '<span style="display: flex; align-items: center; gap: 10px;">' +
+                    '<span class="entry-toggle" style="font-size: 12px; color: #666;">▼</span>' +
+                    '<?php _e('Entry', 'maloney-listings'); ?> #' + (entryIndex + 1) +
+                    '</span>' +
+                    '<button type="button" class="button remove-entry" style="margin: 0;"><?php _e('Remove', 'maloney-listings'); ?></button>' +
+                    '</h3>' +
+                    '<div class="entry-content" style="padding: 15px; display: block;">' +
+                    '<table class="form-table">' +
+                    '<tr><th><label><?php _e('Town', 'maloney-listings'); ?></label></th>' +
+                    '<td><input type="text" name="condo_listings[' + entryIndex + '][town]" placeholder="City | Neighborhood" style="width: 100%;"></td></tr>' +
+                    '<tr><th><label><?php _e('Unit Size', 'maloney-listings'); ?></label></th>' +
+                    '<td><select name="condo_listings[' + entryIndex + '][bedrooms]" required>' +
+                    '<option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>' +
+                    (function() {
+                        var options = '';
+                        for (var i = 0; i < unitSizeOptions.length; i++) {
+                            options += '<option value="' + unitSizeOptions[i].value + '">' + unitSizeOptions[i].label + '</option>';
+                        }
+                        return options;
+                    })() +
+                    '</select></td></tr>' +
+                    '<tr><th><label><?php _e('Bathrooms', 'maloney-listings'); ?></label></th>' +
+                    '<td><select name="condo_listings[' + entryIndex + '][bathrooms]">' +
+                    '<option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>' +
+                    '<option value="1">1</option>' +
+                    '<option value="1.5">1.5</option>' +
+                    '<option value="2">2</option>' +
+                    '<option value="2.5">2.5</option>' +
+                    '<option value="3">3</option>' +
+                    '<option value="3.5">3.5</option>' +
+                    '<option value="4">4</option>' +
+                    '<option value="4.5">4.5</option>' +
+                    '<option value="5+">5+</option>' +
+                    '</select></td></tr>' +
+                    '<tr><th><label><?php _e('Price', 'maloney-listings'); ?></label></th>' +
+                    '<td><input type="number" name="condo_listings[' + entryIndex + '][price]" step="0.01"></td></tr>' +
+                    '<tr><th><label><?php _e('Income Limit (AMI %)', 'maloney-listings'); ?></label></th>' +
+                    '<td><input type="text" name="condo_listings[' + entryIndex + '][income_limit]" placeholder="e.g., 80% or 80% (Minimum) - 100% (Maximum)" style="width: 100%;"></td></tr>' +
+                    '<tr><th><label><?php _e('Type', 'maloney-listings'); ?></label></th>' +
+                    '<td><select name="condo_listings[' + entryIndex + '][type]">' +
+                    '<option value=""><?php _e('-- Select --', 'maloney-listings'); ?></option>' +
+                    '<option value="Lottery">Lottery</option>' +
+                    '<option value="FCFS">FCFS</option>' +
+                    '</select></td></tr>' +
+                    '<tr><th><label><?php _e('Units Available', 'maloney-listings'); ?></label></th>' +
+                    '<td><input type="number" name="condo_listings[' + entryIndex + '][units_available]" min="0" required></td></tr>' +
+                    '<tr><th><label><?php _e('Accessible Units', 'maloney-listings'); ?></label></th>' +
+                    '<td><textarea name="condo_listings[' + entryIndex + '][accessible_units]" rows="3" style="width: 100%;"></textarea></td></tr>' +
+                    '</table></div></div>';
+                $('#condo_listings_meta_box_entries').append(entryHtml);
+                entryIndex++;
+            });
+            
+            // Remove entry button
+            $(document).on('click', '.remove-entry', function() {
+                $(this).closest('.condo-listing-entry').remove();
+            });
+        });
+        </script>
+        <?php
+    }
+    
+    /**
+     * Save condo listings data from meta box
+     */
+    public function save_condo_listings_meta_box($post_id, $post) {
+        // Check nonce
+        if (!isset($_POST['condo_listings_meta_box_nonce']) || !wp_verify_nonce($_POST['condo_listings_meta_box_nonce'], 'save_condo_listings_meta_box')) {
+            return;
+        }
+        
+        // Check autosave
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+        
+        // Check permissions
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+        
+        // Only save for condo properties
+        $listing_types = wp_get_post_terms($post_id, 'listing_type', array('fields' => 'slugs'));
+        $is_condo = false;
+        if (!empty($listing_types)) {
+            foreach ($listing_types as $type_slug) {
+                if (stripos($type_slug, 'condo') !== false || stripos($type_slug, 'condominium') !== false) {
+                    $is_condo = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!$is_condo) {
+            return;
+        }
+        
+        // Get condo listings data from form
+        $condo_listings = isset($_POST['condo_listings']) ? $_POST['condo_listings'] : array();
+        
+        // Clear existing repetitive field values
+        delete_post_meta($post_id, 'wpcf-condo-listings-property');
+        delete_post_meta($post_id, 'wpcf-condo-listings-town');
+        delete_post_meta($post_id, 'wpcf-condo-listings-bedrooms');
+        delete_post_meta($post_id, 'wpcf-condo-listings-bathrooms');
+        delete_post_meta($post_id, 'wpcf-condo-listings-price');
+        delete_post_meta($post_id, 'wpcf-condo-listings-income-limit');
+        delete_post_meta($post_id, 'wpcf-condo-listings-type');
+        delete_post_meta($post_id, 'wpcf-condo-listings-units-available');
+        delete_post_meta($post_id, 'wpcf-condo-listings-accessible-units');
+        delete_post_meta($post_id, 'wpcf-condo-listings-view-apply');
+        
+        // Get property data for auto-fill
+        $property_town = get_post_meta($post_id, 'wpcf-city', true);
+        if (empty($property_town)) {
+            $property_town = get_post_meta($post_id, '_listing_city', true);
+        }
+        $property_link = get_permalink($post_id);
+        
+        $total_available = 0;
+        
+        // Save each entry
+        foreach ($condo_listings as $entry) {
+            $bedrooms = isset($entry['bedrooms']) ? trim($entry['bedrooms']) : '';
+            $units_available = isset($entry['units_available']) ? intval($entry['units_available']) : 0;
+            
+            if (empty($bedrooms) || $units_available <= 0) {
+                continue; // Skip invalid entries
+            }
+            
+            $town = isset($entry['town']) ? sanitize_text_field($entry['town']) : $property_town;
+            $bathrooms = isset($entry['bathrooms']) ? sanitize_text_field($entry['bathrooms']) : '';
+            $price = isset($entry['price']) ? sanitize_text_field($entry['price']) : '';
+            $income_limit = isset($entry['income_limit']) ? sanitize_text_field($entry['income_limit']) : '';
+            $type = isset($entry['type']) ? sanitize_text_field($entry['type']) : '';
+            $accessible_units = isset($entry['accessible_units']) ? sanitize_textarea_field($entry['accessible_units']) : '';
+            
+            // Clean up price (remove $ and commas)
+            $price_clean = preg_replace('/[^0-9.]/', '', $price);
+            
+            // Save as repetitive fields
+            add_post_meta($post_id, 'wpcf-condo-listings-property', $post_id);
+            add_post_meta($post_id, 'wpcf-condo-listings-town', $town);
+            add_post_meta($post_id, 'wpcf-condo-listings-bedrooms', $bedrooms);
+            if (!empty($bathrooms)) {
+                add_post_meta($post_id, 'wpcf-condo-listings-bathrooms', $bathrooms);
+            }
+            add_post_meta($post_id, 'wpcf-condo-listings-price', $price_clean);
+            add_post_meta($post_id, 'wpcf-condo-listings-income-limit', $income_limit);
+            add_post_meta($post_id, 'wpcf-condo-listings-type', $type);
+            add_post_meta($post_id, 'wpcf-condo-listings-units-available', $units_available);
+            add_post_meta($post_id, 'wpcf-condo-listings-accessible-units', $accessible_units);
+            add_post_meta($post_id, 'wpcf-condo-listings-view-apply', esc_url_raw($property_link));
+            
+            $total_available += $units_available;
+        }
+        
+        // Update total available (for backward compatibility)
+        update_post_meta($post_id, 'wpcf-total-available-condo-units', $total_available);
+        update_post_meta($post_id, '_listing_total_available_condo_units', $total_available);
+    }
+    
+    /**
      * Render Template Blocks management page
      */
     public function render_template_blocks_page() {
@@ -3671,14 +5035,18 @@ class Maloney_Listings_Admin {
                             } elseif ($position === 'prepend') {
                                 array_unshift($blocks, $shortcode_block);
                             } elseif ($position === 'before' && !empty($anchor_block)) {
-                                $index = Maloney_Listings_Toolset_Template_Blocks::find_block_index($blocks, $anchor_block);
+                                // Determine if we should search by content pattern
+                                $search_by_content = (stripos($anchor_block, 'neighborhood') !== false || stripos($anchor_block, 'availability') !== false || stripos($anchor_block, 'vacancy') !== false);
+                                $index = Maloney_Listings_Toolset_Template_Blocks::find_block_index($blocks, $anchor_block, $search_by_content);
                                 if ($index !== false) {
                                     array_splice($blocks, $index, 0, array($shortcode_block));
                                 } else {
                                     $blocks[] = $shortcode_block;
                                 }
                             } elseif ($position === 'after' && !empty($anchor_block)) {
-                                $index = Maloney_Listings_Toolset_Template_Blocks::find_block_index($blocks, $anchor_block);
+                                // Determine if we should search by content pattern
+                                $search_by_content = (stripos($anchor_block, 'neighborhood') !== false || stripos($anchor_block, 'availability') !== false || stripos($anchor_block, 'vacancy') !== false);
+                                $index = Maloney_Listings_Toolset_Template_Blocks::find_block_index($blocks, $anchor_block, $search_by_content);
                                 if ($index !== false) {
                                     array_splice($blocks, $index + 1, 0, array($shortcode_block));
                                 } else {
@@ -3700,15 +5068,28 @@ class Maloney_Listings_Admin {
                         } else {
                             $result = new WP_Error('template_not_found', __('Template not found.', 'maloney-listings'));
                         }
-                    } else {
-                        $result = Maloney_Listings_Toolset_Template_Blocks::insert_block(
-                            $template_id,
-                            $block_name,
-                            array(),
-                            $position,
-                            $anchor_block
-                        );
-                    }
+                        } else {
+                            // For shortcode blocks, pass shortcode in attributes
+                            $block_attrs = array();
+                            if ($block_type === 'shortcode' && !empty($shortcode)) {
+                                $block_attrs['shortcode'] = $shortcode;
+                            }
+                            
+                            // Determine if we should search by content (if anchor_block looks like a content pattern)
+                            $search_by_content = false;
+                            if (!empty($anchor_block) && (stripos($anchor_block, 'neighborhood') !== false || stripos($anchor_block, 'availability') !== false || stripos($anchor_block, 'vacancy') !== false)) {
+                                $search_by_content = true;
+                            }
+                            
+                            $result = Maloney_Listings_Toolset_Template_Blocks::insert_block(
+                                $template_id,
+                                $block_name,
+                                $block_attrs,
+                                $position,
+                                $anchor_block,
+                                $search_by_content
+                            );
+                        }
                     
                     if (is_wp_error($result)) {
                         $message = $result->get_error_message();
@@ -3968,6 +5349,213 @@ class Maloney_Listings_Admin {
                             <?php
                         } else {
                             echo '<p>' . __('No blocks found or error occurred.', 'maloney-listings') . '</p>';
+                        }
+                    }
+                }
+                ?>
+            </div>
+            
+            <div class="card" style="margin-top: 20px;">
+                <h2><?php _e('Replace Ninja Table 3596 (Current Condo Listings)', 'maloney-listings'); ?></h2>
+                <p><?php _e('Replace all instances of Ninja Table 3596 (Current Condo Listings) with the new <code>[maloney_listing_condo_listings]</code> shortcode. The shortcode will automatically show listings for the current property on single listing pages.', 'maloney-listings'); ?></p>
+                
+                <form method="post" action="" style="margin-top: 20px;">
+                    <?php wp_nonce_field('replace_ninja_table_3596_action', 'replace_ninja_table_3596_nonce'); ?>
+                    
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">
+                                <label><?php _e('Action', 'maloney-listings'); ?></label>
+                            </th>
+                            <td>
+                                <label>
+                                    <input type="radio" name="ninja_table_3596_action" value="dry_run" checked />
+                                    <?php _e('Dry Run (Preview only - no changes)', 'maloney-listings'); ?>
+                                </label><br>
+                                <label>
+                                    <input type="radio" name="ninja_table_3596_action" value="replace" />
+                                    <?php _e('Replace in all Listing templates', 'maloney-listings'); ?>
+                                </label>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <p class="description">
+                        <?php _e('This will find and replace <code>[types field=\'current-condo-listings-table\'][/types]</code> with <code>[maloney_listing_condo_listings]</code> in all Toolset Content Templates assigned to the Listing post type.', 'maloney-listings'); ?>
+                    </p>
+                    
+                    <p class="submit">
+                        <input type="submit" name="replace_ninja_table_3596" class="button button-primary" value="<?php _e('Execute', 'maloney-listings'); ?>" />
+                    </p>
+                </form>
+                
+                <?php
+                if (isset($_POST['replace_ninja_table_3596']) && check_admin_referer('replace_ninja_table_3596_action', 'replace_ninja_table_3596_nonce')) {
+                    if (class_exists('Maloney_Listings_Toolset_Template_Blocks')) {
+                        $action = isset($_POST['ninja_table_3596_action']) ? sanitize_text_field($_POST['ninja_table_3596_action']) : 'dry_run';
+                        $dry_run = ($action === 'dry_run');
+                        
+                        $results = Maloney_Listings_Toolset_Template_Blocks::replace_ninja_table_3596('listing', $dry_run);
+                        
+                        if (!empty($results)) {
+                            ?>
+                            <div class="notice <?php echo $dry_run ? 'notice-info' : 'notice-success'; ?>" style="margin-top: 20px;">
+                                <h3><?php echo $dry_run ? __('Dry Run Results:', 'maloney-listings') : __('Replacement Results:', 'maloney-listings'); ?></h3>
+                                <table class="widefat striped" style="margin-top: 10px;">
+                                    <thead>
+                                        <tr>
+                                            <th><?php _e('Template ID', 'maloney-listings'); ?></th>
+                                            <th><?php _e('Template Title', 'maloney-listings'); ?></th>
+                                            <?php if ($dry_run) : ?>
+                                                <th><?php _e('Pattern Found', 'maloney-listings'); ?></th>
+                                            <?php else : ?>
+                                                <th><?php _e('Status', 'maloney-listings'); ?></th>
+                                            <?php endif; ?>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php 
+                                        $found_count = 0;
+                                        $replaced_count = 0;
+                                        foreach ($results as $template_id => $result) : 
+                                            $template = get_post($template_id);
+                                            $template_title = $template ? $template->post_title : __('Unknown', 'maloney-listings');
+                                            
+                                            if ($dry_run) {
+                                                if ($result['success'] && $result['found']) {
+                                                    $found_count++;
+                                                }
+                                            } else {
+                                                if ($result['success'] && $result['replaced']) {
+                                                    $replaced_count++;
+                                                }
+                                            }
+                                        ?>
+                                            <tr>
+                                                <td><?php echo esc_html($template_id); ?></td>
+                                                <td><?php echo esc_html($template_title); ?></td>
+                                                <td>
+                                                    <?php if ($dry_run) : ?>
+                                                        <?php if ($result['success'] && $result['found']) : ?>
+                                                            <span style="color: #d63638; font-weight: bold;"><?php _e('Found', 'maloney-listings'); ?></span>
+                                                        <?php elseif ($result['success']) : ?>
+                                                            <span style="color: #00a32a;"><?php _e('Not Found', 'maloney-listings'); ?></span>
+                                                        <?php else : ?>
+                                                            <span style="color: #d63638;"><?php echo esc_html($result['error']); ?></span>
+                                                        <?php endif; ?>
+                                                    <?php else : ?>
+                                                        <?php if ($result['success'] && $result['replaced']) : ?>
+                                                            <span style="color: #00a32a; font-weight: bold;"><?php _e('Replaced', 'maloney-listings'); ?></span>
+                                                        <?php elseif ($result['success']) : ?>
+                                                            <span style="color: #d63638;"><?php _e('Not Found', 'maloney-listings'); ?></span>
+                                                        <?php else : ?>
+                                                            <span style="color: #d63638;"><?php echo esc_html($result['error']); ?></span>
+                                                        <?php endif; ?>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <p style="margin-top: 15px;">
+                                    <?php if ($dry_run) : ?>
+                                        <strong><?php printf(__('Found pattern in %d template(s).', 'maloney-listings'), $found_count); ?></strong>
+                                        <?php if ($found_count > 0) : ?>
+                                            <?php _e('Run again with "Replace" selected to apply the changes.', 'maloney-listings'); ?>
+                                        <?php endif; ?>
+                                    <?php else : ?>
+                                        <strong><?php printf(__('Replaced in %d template(s).', 'maloney-listings'), $replaced_count); ?></strong>
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                            <?php
+                        }
+                    }
+                }
+                ?>
+            </div>
+            
+            <div class="card" style="margin-top: 20px;">
+                <h2><?php _e('Insert Map After Neighborhood', 'maloney-listings'); ?></h2>
+                <p><?php _e('Automatically insert the listing map block after the neighborhood block in all Toolset Content Templates.', 'maloney-listings'); ?></p>
+                
+                <form method="post" action="" style="margin-top: 20px;">
+                    <?php wp_nonce_field('insert_map_action', 'insert_map_nonce'); ?>
+                    
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">
+                                <label><?php _e('Template Scope', 'maloney-listings'); ?></label>
+                            </th>
+                            <td>
+                                <label>
+                                    <input type="radio" name="map_template_scope" value="assigned" checked />
+                                    <?php _e('Only templates assigned to Listing post type', 'maloney-listings'); ?>
+                                </label><br>
+                                <label>
+                                    <input type="radio" name="map_template_scope" value="all" />
+                                    <?php _e('All Toolset Content Templates', 'maloney-listings'); ?>
+                                </label>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <p class="description">
+                        <?php _e('This will add the map shortcode [maloney_listing_map] after any block containing "neighborhood" in the selected templates.', 'maloney-listings'); ?>
+                    </p>
+                    
+                    <p class="submit">
+                        <input type="submit" name="insert_map_after_neighborhood" class="button button-primary" value="<?php _e('Insert Map After Neighborhood', 'maloney-listings'); ?>" />
+                    </p>
+                </form>
+                
+                <?php
+                // Handle insert map after neighborhood form submission
+                if (isset($_POST['insert_map_after_neighborhood']) && check_admin_referer('insert_map_action', 'insert_map_nonce')) {
+                    if (class_exists('Maloney_Listings_Toolset_Template_Blocks')) {
+                        $template_scope = isset($_POST['map_template_scope']) ? sanitize_text_field($_POST['map_template_scope']) : 'assigned';
+                        $all_templates = ($template_scope === 'all');
+                        $results = Maloney_Listings_Toolset_Template_Blocks::insert_map_after_neighborhood($all_templates);
+                        
+                        if (!empty($results)) {
+                            ?>
+                            <h3 style="margin-top: 20px;"><?php _e('Results:', 'maloney-listings'); ?></h3>
+                            <table class="widefat striped" style="margin-top: 15px;">
+                                <thead>
+                                    <tr>
+                                        <th><?php _e('Template ID', 'maloney-listings'); ?></th>
+                                        <th><?php _e('Status', 'maloney-listings'); ?></th>
+                                        <th><?php _e('Message', 'maloney-listings'); ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($results as $template_id => $result) : 
+                                        $template = get_post($template_id);
+                                        $template_title = $template ? $template->post_title : 'Template ' . $template_id;
+                                        ?>
+                                        <tr>
+                                            <td><?php echo esc_html($template_title); ?> (<?php echo esc_html($template_id); ?>)</td>
+                                            <td>
+                                                <?php if (is_wp_error($result)) : ?>
+                                                    <span style="color: #d63638;"><?php _e('Error', 'maloney-listings'); ?></span>
+                                                <?php else : ?>
+                                                    <span style="color: #00a32a;"><?php _e('Success', 'maloney-listings'); ?></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php 
+                                                if (is_wp_error($result)) {
+                                                    echo esc_html($result->get_error_message());
+                                                } else {
+                                                    echo esc_html(__('Map block inserted successfully.', 'maloney-listings'));
+                                                }
+                                                ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                            <?php
                         }
                     }
                 }

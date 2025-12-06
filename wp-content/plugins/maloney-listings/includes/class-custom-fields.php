@@ -26,6 +26,9 @@ class Maloney_Listings_Custom_Fields {
         // Keep admin columns
         add_filter('manage_listing_posts_columns', array($this, 'add_admin_columns'));
         add_action('manage_listing_posts_custom_column', array($this, 'render_admin_columns'), 10, 2);
+        // Make status column sortable
+        add_filter('manage_edit-listing_sortable_columns', array($this, 'make_status_column_sortable'));
+        add_action('pre_get_posts', array($this, 'handle_status_column_sorting'));
         
         // Add unit_type field that syncs with listing_type taxonomy
         add_action('add_meta_boxes', array($this, 'add_unit_type_meta_box'));
@@ -300,16 +303,21 @@ class Maloney_Listings_Custom_Fields {
             return $show;
         }
         
-        // Hide "Current Rental Availability" Toolset field group - we use custom meta box instead
+        // Hide "Current Availability", "Current Rental Availability", and "Current Condo Listings" Toolset field groups - we use custom meta boxes instead
         // Check by group slug, ID, or name
         $hide_group = false;
         
         // Check by slug
-        if ($group_slug === 'current-rental-availability') {
+        if ($group_slug === 'current-rental-availability' || 
+            $group_slug === 'current-condo-listings' || 
+            $group_slug === 'current-availability') {
             $hide_group = true;
         }
         
-        // Check by known ID from database (post ID 12542)
+        // Check by known ID from database
+        // Current Rental Availability (post ID 12542)
+        // Current Condo Listings - add known ID if available
+        // Current Availability - add known ID if available
         if ($group_id == 12542) {
             $hide_group = true;
         }
@@ -317,10 +325,25 @@ class Maloney_Listings_Custom_Fields {
         // Check by group name/title using post object
         if (!$hide_group && $group_id > 0) {
             $group_post = get_post($group_id);
-            if ($group_post && 
-                stripos($group_post->post_title, 'Current') !== false && 
-                (stripos($group_post->post_title, 'Rental') !== false || stripos($group_post->post_title, 'Availability') !== false)) {
-                $hide_group = true;
+            if ($group_post) {
+                $title_lower = strtolower($group_post->post_title);
+                // Hide "Current Availability", "Current Rental Availability", or "Current Condo Listings"
+                if (stripos($title_lower, 'current') !== false) {
+                    // Check for "Current Availability" (without Rental/Condo - this is the old name)
+                    if (stripos($title_lower, 'availability') !== false && 
+                        stripos($title_lower, 'rental') === false && 
+                        stripos($title_lower, 'condo') === false) {
+                        $hide_group = true;
+                    }
+                    // Check for "Current Rental Availability"
+                    if (stripos($title_lower, 'rental') !== false && stripos($title_lower, 'availability') !== false) {
+                        $hide_group = true;
+                    }
+                    // Check for "Current Condo Listings"
+                    if (stripos($title_lower, 'condo') !== false && stripos($title_lower, 'listing') !== false) {
+                        $hide_group = true;
+                    }
+                }
             }
         }
         
@@ -330,10 +353,23 @@ class Maloney_Listings_Custom_Fields {
                 // toolset_get_field_group requires 2 arguments: $group_id and $domain
                 $group_obj = toolset_get_field_group($group_id, 'posts');
                 if ($group_obj) {
-                    $name = $group_obj->get_display_name();
-                    if (stripos($name, 'Current') !== false && 
-                        (stripos($name, 'Rental') !== false || stripos($name, 'Availability') !== false)) {
-                        $hide_group = true;
+                    $name = strtolower($group_obj->get_display_name());
+                    // Hide "Current Availability", "Current Rental Availability", or "Current Condo Listings"
+                    if (stripos($name, 'current') !== false) {
+                        // Check for "Current Availability" (without Rental/Condo - this is the old name)
+                        if (stripos($name, 'availability') !== false && 
+                            stripos($name, 'rental') === false && 
+                            stripos($name, 'condo') === false) {
+                            $hide_group = true;
+                        }
+                        // Check for "Current Rental Availability"
+                        if (stripos($name, 'rental') !== false && stripos($name, 'availability') !== false) {
+                            $hide_group = true;
+                        }
+                        // Check for "Current Condo Listings"
+                        if (stripos($name, 'condo') !== false && stripos($name, 'listing') !== false) {
+                            $hide_group = true;
+                        }
                     }
                 }
             } catch (Exception $e) {
@@ -796,6 +832,90 @@ class Maloney_Listings_Custom_Fields {
         $new_columns['date'] = $columns['date'];
         
         return $new_columns;
+    }
+    
+    /**
+     * Make status column sortable
+     * 
+     * @param array $columns Existing sortable columns
+     * @return array Modified columns array
+     */
+    public function make_status_column_sortable($columns) {
+        $columns['listing_status'] = 'listing_status';
+        return $columns;
+    }
+    
+    /**
+     * Handle sorting by status column
+     * 
+     * @param WP_Query $query The query object
+     */
+    public function handle_status_column_sorting($query) {
+        global $pagenow, $wpdb;
+        
+        if (!is_admin() || $pagenow !== 'edit.php') {
+            return;
+        }
+        
+        if (!isset($query->query_vars['post_type']) || $query->query_vars['post_type'] !== 'listing') {
+            return;
+        }
+        
+        $orderby = $query->get('orderby');
+        
+        if ($orderby === 'listing_status') {
+            $order = $query->get('order') ? $query->get('order') : 'ASC';
+            
+            // Use a custom orderby that handles both rental and condo status fields
+            // We'll join both meta tables and use COALESCE to get the first non-null value
+            add_filter('posts_join', array($this, 'add_status_sort_join'));
+            add_filter('posts_orderby', array($this, 'add_status_sort_orderby'), 10, 1);
+            
+            // Store order for use in orderby filter
+            $this->status_sort_order = $order;
+        }
+    }
+    
+    /**
+     * Add JOIN clauses for status sorting
+     * 
+     * @param string $join The JOIN clause
+     * @return string Modified JOIN clause
+     */
+    public function add_status_sort_join($join) {
+        global $wpdb;
+        
+        // Check if joins already exist to avoid duplicates
+        if (strpos($join, 'mt1') === false) {
+            $join .= " LEFT JOIN {$wpdb->postmeta} AS mt1 ON ({$wpdb->posts}.ID = mt1.post_id AND mt1.meta_key = 'wpcf-status')";
+        }
+        if (strpos($join, 'mt2') === false) {
+            $join .= " LEFT JOIN {$wpdb->postmeta} AS mt2 ON ({$wpdb->posts}.ID = mt2.post_id AND mt2.meta_key = 'wpcf-condo-status')";
+        }
+        
+        // Remove filter after use
+        remove_filter('posts_join', array($this, 'add_status_sort_join'));
+        
+        return $join;
+    }
+    
+    /**
+     * Add ORDER BY clause for status sorting
+     * 
+     * @param string $orderby The ORDER BY clause
+     * @return string Modified ORDER BY clause
+     */
+    public function add_status_sort_orderby($orderby) {
+        $order = isset($this->status_sort_order) ? $this->status_sort_order : 'ASC';
+        
+        // Use COALESCE to get the first non-null status value, then sort by it
+        $orderby = "COALESCE(mt1.meta_value, mt2.meta_value, '') " . $order;
+        
+        // Remove filter after use
+        remove_filter('posts_orderby', array($this, 'add_status_sort_orderby'), 10);
+        unset($this->status_sort_order);
+        
+        return $orderby;
     }
     
     /**

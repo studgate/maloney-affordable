@@ -105,6 +105,14 @@ class Maloney_Listings_Blocks {
         $button_text = isset($attributes['buttonText']) ? $attributes['buttonText'] : 'Get started';
         $show_tabs = isset($attributes['showTabs']) ? $attributes['showTabs'] : true;
         
+        // Detect if we're on the homepage
+        $is_homepage = is_front_page() || is_home();
+        
+        // Update placeholder for homepage (no zip code mention)
+        if ($is_homepage) {
+            $placeholder = 'Search by town, city, or neighborhood...';
+        }
+        
         // Get listings archive URL - try both singular and plural
         $archive_url = get_post_type_archive_link('listing');
         if (empty($archive_url)) {
@@ -124,15 +132,15 @@ class Maloney_Listings_Blocks {
         
         ob_start();
         ?>
-        <div class="maloney-listings-search-form-block" id="<?php echo esc_attr($form_id); ?>">
+        <div class="maloney-listings-search-form-block maloney-search-form-wrapper <?php echo $is_homepage ? 'maloney-search-homepage' : ''; ?>" id="<?php echo esc_attr($form_id); ?>">
             <?php if ($show_tabs) : ?>
             <div class="maloney-search-tabs">
-                <button type="button" class="maloney-search-tab" data-type="condo">Condo</button>
-                <button type="button" class="maloney-search-tab active" data-type="rental">Rental</button>
+                <button type="button" class="maloney-search-tab <?php echo $is_homepage ? 'active' : ''; ?>" data-type="condo">Condo</button>
+                <button type="button" class="maloney-search-tab <?php echo $is_homepage ? '' : 'active'; ?>" data-type="rental">Rental</button>
             </div>
             <?php endif; ?>
             <form class="maloney-search-form" method="get" action="<?php echo esc_url($archive_url); ?>">
-                <div class="maloney-search-form-container">
+                <div class="maloney-search-form-container <?php echo $is_homepage ? 'maloney-search-container-homepage' : ''; ?>">
                     <div class="maloney-search-input-wrapper">
                         <input 
                             type="text" 
@@ -163,10 +171,14 @@ class Maloney_Listings_Blocks {
             <script type="text/javascript">
                 // Pass listings and zip codes data to JavaScript for autocomplete
                 if (typeof window.maloneyListingsData === 'undefined') {
-                    window.maloneyListingsData = <?php echo json_encode($listings); ?>;
+                    window.maloneyListingsData = <?php echo wp_json_encode($listings); ?>;
                 }
                 if (typeof window.maloneyZipCodes === 'undefined') {
-                    window.maloneyZipCodes = <?php echo json_encode($zip_codes); ?>;
+                    window.maloneyZipCodes = <?php echo wp_json_encode($zip_codes); ?>;
+                }
+                // Pass homepage flag
+                if (typeof window.maloneySearchIsHomepage === 'undefined') {
+                    window.maloneySearchIsHomepage = <?php echo $is_homepage ? 'true' : 'false'; ?>;
                 }
             </script>
             <?php
@@ -177,10 +189,83 @@ class Maloney_Listings_Blocks {
             self::$search_form_css_output = true;
             ?>
             <style>
-        .maloney-listings-search-form-block {
+        .maloney-listings-search-form-block,
+        .maloney-search-form-wrapper {
             margin: 20px 0;
             position: relative;
             z-index: 9999;
+        }
+        /* Ensure proper z-index stacking for Divi sections */
+        .et_pb_section_0 {
+            position: relative;
+            z-index: 2;
+        }
+        .et_pb_section_1 {
+            position: relative;
+            z-index: 1;
+        }
+        .home-hero {
+            position: relative;
+            z-index: 3;
+        }
+        .home-hero h1 {
+            color: #FFFFFF !important;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.5) !important;
+            border-radius: 5px !important;
+            padding: 15px 0 !important;
+            display: inline-block !important;
+            margin-bottom: 10px !important;
+            backdrop-filter: blur(5px) !important;
+            -webkit-backdrop-filter: blur(5px) !important;
+        }
+        .home-hero .et_pb_text_1.et_pb_text {
+            color: #FFFFFF !important;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 0, 0, 0.5) !important;
+            background: rgba(0, 0, 0, 0.5) !important;
+            border-radius: 5px !important;
+            padding: 15px 20px !important;
+            display: inline-block !important;
+            backdrop-filter: blur(5px) !important;
+            -webkit-backdrop-filter: blur(5px) !important;
+        }
+        .home-hero .et_pb_text_1.et_pb_text p,
+        .home-hero .et_pb_text_1.et_pb_text h2,
+        .home-hero .et_pb_text_1.et_pb_text h3 {
+            color: #FFFFFF !important;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 0, 0, 0.5) !important;
+        }
+        .listings-search {
+            position: relative;
+            z-index: 3;
+        }
+        /* Homepage specific styling - transparent blurred background */
+        .maloney-listings-search-form-block.maloney-search-homepage {
+            background: rgba(255, 255, 255, 0.85) !important;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            width: 100%;
+            max-width: 800px;
+            margin: 20px 0;
+            position: relative;
+            z-index: 999999 !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+        }
+        .maloney-search-container-homepage {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 1000000;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+        }
+        .maloney-search-container-homepage:focus-within {
+            border-color: #0073aa;
+            box-shadow: 0 2px 12px rgba(0,115,170,0.15);
         }
         .maloney-search-tabs {
             display: flex;
@@ -193,7 +278,7 @@ class Maloney_Listings_Blocks {
             background: #f5f5f5;
             color: #333;
             border: none;
-            border-bottom: 3px solid transparent;
+            border-bottom: 3px solid #BA4D4A;
             font-size: 16px;
             font-weight: 500;
             cursor: pointer;
@@ -205,10 +290,10 @@ class Maloney_Listings_Blocks {
             background: #e8e8e8;
         }
         .maloney-search-tab.active {
-            background: white;
-            color: #333;
-            border-bottom-color: #0073aa;
             font-weight: 600;
+            background: #0073aa;
+            color: #ffffff;
+            border-bottom-color: #0073aa;
         }
         .maloney-search-form {
             width: 100%;
@@ -231,6 +316,11 @@ class Maloney_Listings_Blocks {
             display: flex;
             align-items: center;
             z-index: 10000;
+        }
+        /* Homepage input wrapper needs higher z-index */
+        .maloney-search-homepage .maloney-search-input-wrapper {
+            z-index: 1000001 !important;
+            position: relative;
         }
         .maloney-search-input {
             width: 100%;
@@ -259,6 +349,13 @@ class Maloney_Listings_Blocks {
             z-index: 99999 !important;
             display: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        }
+        /* Homepage autocomplete - must appear above everything */
+        .maloney-search-homepage .maloney-location-autocomplete {
+            z-index: 2147483647 !important; /* Maximum z-index value */
+            position: absolute !important;
+            background: white !important;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25) !important; /* Stronger shadow for visibility */
         }
         .maloney-location-autocomplete ul {
             list-style: none;
@@ -347,9 +444,14 @@ class Maloney_Listings_Blocks {
                 var input = document.getElementById('<?php echo esc_js($form_id); ?>-input');
                 var autocomplete = document.getElementById('<?php echo esc_js($form_id); ?>-autocomplete');
                 var tabs = block.querySelectorAll('.maloney-search-tab');
-                var selectedType = 'rental'; // Default to rental
+                var selectedType = isHomepage ? 'condo' : 'rental'; // Default to condo on homepage, rental elsewhere
                 var selectedSearchValue = null; // Store selected autocomplete value
                 var selectedEntryType = null; // Store selected entry type (city, zip, or address)
+                var selectedCoordinates = null; // Store selected coordinates (lat/lng)
+                
+                // Check if we're on homepage
+                var isHomepage = window.maloneySearchIsHomepage === true;
+                var citiesWithListings = Array.isArray(window.maloneyCitiesWithListings) ? window.maloneyCitiesWithListings : [];
                 
                 // Get listings and zip codes data
                 var listingData = Array.isArray(window.maloneyListingsData) ? window.maloneyListingsData : [];
@@ -375,7 +477,39 @@ class Maloney_Listings_Blocks {
                     localEntries.push(entry);
                 };
                 
-                // Process listing data - includes city, zip, and addresses
+                // Helper function to extract city from address
+                var extractCityFromAddress = function(address) {
+                    if (!address) return null;
+                    // Common patterns: "Street, City, State ZIP" or "Street, City, State"
+                    // Try to match city before state (MA, Massachusetts, etc.)
+                    // Handle various formats:
+                    // - "123 Main St, Boston, MA 02120"
+                    // - "123 Main St, Boston, Massachusetts"
+                    // - "123 Main St, Boston, MA"
+                    var patterns = [
+                        // Pattern: ", City, MA ZIP" or ", City, MA"
+                        /,\s*([^,]+?),\s*(?:MA|Massachusetts|Mass\.?)(?:\s+\d{5})?$/i,
+                        // Pattern: ", City, MA ZIP" (with space before ZIP)
+                        /,\s*([^,]+?),\s*(?:MA|Massachusetts|Mass\.?)\s+\d{5}/i,
+                        // Pattern: ", City, State" (more general)
+                        /,\s*([^,]+?),\s*[A-Z]{2}(?:\s+\d{5})?$/i,
+                    ];
+                    
+                    for (var i = 0; i < patterns.length; i++) {
+                        var match = address.match(patterns[i]);
+                        if (match && match[1]) {
+                            var extractedCity = match[1].trim();
+                            // Clean up - remove any trailing state abbreviations or zip codes
+                            extractedCity = extractedCity.replace(/\s+(?:MA|Massachusetts|Mass\.?|\d{5}).*$/i, '').trim();
+                            if (extractedCity) {
+                                return extractedCity;
+                            }
+                        }
+                    }
+                    return null;
+                };
+                
+                // Process listing data
                 listingData.forEach(function(listing) {
                     var lat = listing.lat ? parseFloat(listing.lat) : NaN;
                     var lng = listing.lng ? parseFloat(listing.lng) : NaN;
@@ -386,78 +520,160 @@ class Maloney_Listings_Blocks {
                     var zip = (listing.zip || '').trim();
                     var address = (listing.address || '').trim();
                     
-                    // Add city entry
-                    if (city) {
-                        addEntry('city:' + city.toLowerCase(), {
-                            type: 'city',
-                            value: city,
-                            searchValue: city,
-                            city: city,
-                            label: city + ', ' + stateLabel,
-                            zip: zip,
-                            lat: coords.lat,
-                            lng: coords.lng
-                        });
+                    // Extract city from address field
+                    var cityFromAddress = null;
+                    if (address) {
+                        cityFromAddress = extractCityFromAddress(address);
                     }
-                    // Add city label entry if different
-                    if (cityLabel && cityLabel.toLowerCase() !== city.toLowerCase()) {
-                        addEntry('citylabel:' + cityLabel.toLowerCase(), {
-                            type: 'city',
-                            value: cityLabel,
-                            searchValue: cityLabel,
-                            city: cityLabel,
-                            label: cityLabel,
-                            zip: zip,
-                            lat: coords.lat,
-                            lng: coords.lng
-                        });
+                    
+                    // Collect all unique cities (from city field and address field)
+                    var allCities = [];
+                    var seenCities = {};
+                    
+                    // Add city from city field
+                    if (city && !seenCities[city.toLowerCase()]) {
+                        allCities.push(city);
+                        seenCities[city.toLowerCase()] = true;
                     }
-                    // Add zip entry
-                    if (zip) {
-                        var zipLabel = zip;
-                        if (city) {
-                            zipLabel += ', ' + city + ', ' + stateLabel;
+                    
+                    // Add city from address field
+                    if (cityFromAddress && !seenCities[cityFromAddress.toLowerCase()]) {
+                        allCities.push(cityFromAddress);
+                        seenCities[cityFromAddress.toLowerCase()] = true;
+                    }
+                    
+                    // Process each unique city
+                    allCities.forEach(function(cityName) {
+                        // Extract base city name if it contains "|" (e.g., "Boston | Allston" -> "Boston")
+                        var baseCity = cityName;
+                        var hasNeighborhood = false;
+                        if (cityName.indexOf('|') !== -1) {
+                            var parts = cityName.split('|');
+                            baseCity = parts[0].trim();
+                            hasNeighborhood = true;
                         }
+                        
+                        // Add standalone city entry (e.g., "Boston, MA")
+                        if (baseCity) {
+                            // Use a unique key that includes the source to avoid conflicts
+                            var entryKey = 'city:' + baseCity.toLowerCase();
+                            addEntry(entryKey, {
+                                type: 'city',
+                                value: baseCity,
+                                searchValue: baseCity,
+                                city: baseCity,
+                                label: baseCity + ', ' + stateLabel,
+                                zip: zip,
+                                lat: coords.lat,
+                                lng: coords.lng
+                            });
+                        }
+                        
+                        // Also add the full city entry if it has a neighborhood (e.g., "Boston | Allston, MA")
+                        if (hasNeighborhood && cityName !== baseCity) {
+                            addEntry('cityfull:' + cityName.toLowerCase(), {
+                                type: 'city',
+                                value: cityName,
+                                searchValue: cityName,
+                                city: cityName,
+                                label: cityName + ', ' + stateLabel,
+                                zip: zip,
+                                lat: coords.lat,
+                                lng: coords.lng
+                            });
+                        }
+                    });
+                    // Add city label entry if different (also process it like other cities)
+                    if (cityLabel && cityLabel.toLowerCase() !== (city || '').toLowerCase()) {
+                        // Process cityLabel the same way we process other cities
+                        var baseCityLabel = cityLabel;
+                        var hasNeighborhoodLabel = false;
+                        if (cityLabel.indexOf('|') !== -1) {
+                            var labelParts = cityLabel.split('|');
+                            baseCityLabel = labelParts[0].trim();
+                            hasNeighborhoodLabel = true;
+                        }
+                        
+                        // Add standalone city entry from label
+                        if (baseCityLabel) {
+                            addEntry('citylabel:' + baseCityLabel.toLowerCase(), {
+                                type: 'city',
+                                value: baseCityLabel,
+                                searchValue: baseCityLabel,
+                                city: baseCityLabel,
+                                label: baseCityLabel + ', ' + stateLabel,
+                                zip: zip,
+                                lat: coords.lat,
+                                lng: coords.lng
+                            });
+                        }
+                        
+                        // Add full city label entry if it has neighborhood
+                        if (hasNeighborhoodLabel && cityLabel !== baseCityLabel) {
+                            addEntry('citylabelfull:' + cityLabel.toLowerCase(), {
+                                type: 'city',
+                                value: cityLabel,
+                                searchValue: cityLabel,
+                                city: cityLabel,
+                                label: cityLabel + ', ' + stateLabel,
+                                zip: zip,
+                                lat: coords.lat,
+                                lng: coords.lng
+                            });
+                        }
+                    }
+                    
+                    // Only add zip codes and addresses if NOT on homepage
+                    if (!isHomepage) {
+                        // Add zip entry
+                        if (zip) {
+                            var zipLabel = zip;
+                            if (city) {
+                                zipLabel += ', ' + city + ', ' + stateLabel;
+                            }
+                            addEntry('zip:' + zip, {
+                                type: 'zip',
+                                value: zip,
+                                searchValue: zip,
+                                city: city,
+                                label: zipLabel,
+                                zip: zip,
+                                lat: coords.lat,
+                                lng: coords.lng
+                            });
+                        }
+                        // Add address entry
+                        if (address) {
+                            addEntry('addr:' + address.toLowerCase(), {
+                                type: 'address',
+                                value: address,
+                                searchValue: address,
+                                city: city,
+                                label: address,
+                                zip: zip,
+                                lat: coords.lat,
+                                lng: coords.lng
+                            });
+                        }
+                    }
+                });
+                
+                // Add zip codes from zipCodes array (only if NOT on homepage)
+                if (!isHomepage) {
+                    zipCodes.forEach(function(zip) {
+                        if (!zip) return;
                         addEntry('zip:' + zip, {
                             type: 'zip',
                             value: zip,
                             searchValue: zip,
-                            city: city,
-                            label: zipLabel,
+                            city: '',
+                            label: zip,
                             zip: zip,
-                            lat: coords.lat,
-                            lng: coords.lng
+                            lat: '',
+                            lng: ''
                         });
-                    }
-                    // Add address entry
-                    if (address) {
-                        addEntry('addr:' + address.toLowerCase(), {
-                            type: 'address',
-                            value: address,
-                            searchValue: address,
-                            city: city,
-                            label: address,
-                            zip: zip,
-                            lat: coords.lat,
-                            lng: coords.lng
-                        });
-                    }
-                });
-                
-                // Add zip codes from zipCodes array
-                zipCodes.forEach(function(zip) {
-                    if (!zip) return;
-                    addEntry('zip:' + zip, {
-                        type: 'zip',
-                        value: zip,
-                        searchValue: zip,
-                        city: '',
-                        label: zip,
-                        zip: zip,
-                        lat: '',
-                        lng: ''
                     });
-                });
+                }
                 
                 // Get matching entries
                 var getMatches = function(query) {
@@ -466,31 +682,129 @@ class Maloney_Listings_Blocks {
                     
                     var matchingEntries = [];
                     var seenLabels = new Set();
+                    var searchCoords = null; // Store coordinates if we're searching for a location
                     
-                    localEntries.forEach(function(entry) {
-                        var matches = false;
+                    // On homepage, only show cities
+                    if (isHomepage) {
+                        // First, try to find exact matches from localEntries (cities only)
+                        // Prioritize standalone city entries (without "|") over neighborhood entries
+                        var standaloneCityEntries = [];
+                        var neighborhoodCityEntries = [];
                         
-                        // Match city, zip, or address entries
-                        if (entry.type === 'city') {
+                        localEntries.forEach(function(entry) {
+                            if (entry.type !== 'city') return; // Only cities on homepage
+                            
                             var cityValue = (entry.city || entry.value || entry.searchValue || '').toLowerCase();
-                            matches = cityValue.indexOf(qLower) !== -1;
-                        } else if (entry.type === 'zip') {
-                            var zipValue = (entry.zip || entry.value || entry.searchValue || '').toLowerCase();
-                            matches = zipValue.indexOf(qLower) !== -1;
-                        } else if (entry.type === 'address') {
-                            // Match addresses - check if query is in the address
-                            var addressValue = (entry.value || entry.searchValue || entry.label || '').toLowerCase();
-                            matches = addressValue.indexOf(qLower) !== -1;
+                            // Match only if city name STARTS with the query (not contains)
+                            var matches = cityValue.startsWith(qLower);
+                            
+                            if (matches) {
+                                var labelKey = entry.label.toLowerCase().trim();
+                                if (!seenLabels.has(labelKey)) {
+                                    seenLabels.add(labelKey);
+                                    // Check if this is a standalone city (no "|" in city name)
+                                    var isStandalone = cityValue.indexOf('|') === -1;
+                                    if (isStandalone) {
+                                        standaloneCityEntries.push(entry);
+                                    } else {
+                                        neighborhoodCityEntries.push(entry);
+                                    }
+                                    // Store coordinates for distance calculation
+                                    if (entry.lat && entry.lng) {
+                                        searchCoords = { lat: entry.lat, lng: entry.lng };
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // Add standalone city entries first, then neighborhood entries
+                        matchingEntries = matchingEntries.concat(standaloneCityEntries);
+                        matchingEntries = matchingEntries.concat(neighborhoodCityEntries);
+                        
+                        // If no exact matches found, show fallback cities (always show at least 3)
+                        if (matchingEntries.length === 0) {
+                            // Use citiesWithListings as fallback - show first 3 that match query or just first 3
+                            var fallbackCities = [];
+                            if (citiesWithListings.length > 0) {
+                                // Try to find cities that partially match
+                                citiesWithListings.forEach(function(city) {
+                                    if (!city || (!city.city && !city.name)) return;
+                                    var cityName = (city.city || city.name).toLowerCase();
+                                    // Match only if city name STARTS with the query
+                                    if (cityName.startsWith(qLower)) {
+                                        fallbackCities.push(city);
+                                    }
+                                });
+                                // If no partial matches, just take first 3
+                                if (fallbackCities.length === 0) {
+                                    fallbackCities = citiesWithListings.slice(0, 3);
+                                } else {
+                                    // Limit to 3
+                                    fallbackCities = fallbackCities.slice(0, 3);
+                                }
+                            }
+                            
+                            fallbackCities.forEach(function(city) {
+                                if (!city || (!city.city && !city.name)) return;
+                                var cityEntry = {
+                                    type: 'city',
+                                    value: city.city || city.name,
+                                    searchValue: city.city || city.name,
+                                    city: city.city || city.name,
+                                    label: (city.city || city.name) + ', MA',
+                                    zip: city.zip || '',
+                                    lat: city.lat || '',
+                                    lng: city.lng || ''
+                                };
+                                var labelKey = cityEntry.label.toLowerCase().trim();
+                                if (!seenLabels.has(labelKey)) {
+                                    seenLabels.add(labelKey);
+                                    matchingEntries.push(cityEntry);
+                                }
+                            });
                         }
                         
-                        if (matches) {
-                            var labelKey = entry.label.toLowerCase().trim();
-                            if (!seenLabels.has(labelKey)) {
-                                seenLabels.add(labelKey);
-                                matchingEntries.push(entry);
-                            }
+                        // If still no results and we have localEntries with cities, show first 10 cities
+                        if (matchingEntries.length === 0 && localEntries.length > 0) {
+                            var cityCount = 0;
+                            localEntries.forEach(function(entry) {
+                                if (entry.type === 'city' && cityCount < 10) {
+                                    var labelKey = entry.label.toLowerCase().trim();
+                                    if (!seenLabels.has(labelKey)) {
+                                        seenLabels.add(labelKey);
+                                        matchingEntries.push(entry);
+                                        cityCount++;
+                                    }
+                                }
+                            });
                         }
-                    });
+                    } else {
+                        // Not homepage - include all types
+                        localEntries.forEach(function(entry) {
+                            var matches = false;
+                            
+                            // Match city, zip, or address entries - must START with query
+                            if (entry.type === 'city') {
+                                var cityValue = (entry.city || entry.value || entry.searchValue || '').toLowerCase();
+                                matches = cityValue.startsWith(qLower);
+                            } else if (entry.type === 'zip') {
+                                var zipValue = (entry.zip || entry.value || entry.searchValue || '').toLowerCase();
+                                matches = zipValue.startsWith(qLower);
+                            } else if (entry.type === 'address') {
+                                // Match addresses - check if address STARTS with the query
+                                var addressValue = (entry.value || entry.searchValue || entry.label || '').toLowerCase();
+                                matches = addressValue.startsWith(qLower);
+                            }
+                            
+                            if (matches) {
+                                var labelKey = entry.label.toLowerCase().trim();
+                                if (!seenLabels.has(labelKey)) {
+                                    seenLabels.add(labelKey);
+                                    matchingEntries.push(entry);
+                                }
+                            }
+                        });
+                    }
                     
                     // Sort: numbers first, then letters
                     matchingEntries.sort(function(a, b) {
@@ -515,13 +829,42 @@ class Maloney_Listings_Blocks {
                     var icon = '<svg class="suggestion-pin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>';
                     var html = '<ul>';
                     items.forEach(function(item) {
-                        var label = escapeHtml(item.label);
-                        var searchValue = escapeHtml(item.searchValue || item.value || item.label);
-                        html += '<li class="location-suggestion" data-type="' + escapeHtml(item.type) + '" data-value="' + escapeHtml(item.value) + '" data-search-value="' + searchValue + '"><span class="suggestion-icon">' + icon + '</span><span class="suggestion-primary">' + label + '</span></li>';
+                        if (!item) return;
+                        var itemType = escapeHtml(item.type || 'city');
+                        // For cities, use the city name (item.city or item.value), not the full label
+                        var itemValue = '';
+                        if (item.type === 'city' && item.city) {
+                            itemValue = escapeHtml(item.city);
+                        } else {
+                            itemValue = escapeHtml(item.value || '');
+                        }
+                        var itemLabel = escapeHtml(item.label || '');
+                        // Use city name for search value on homepage, otherwise use searchValue
+                        var itemSearchValue = '';
+                        if (isHomepage && item.type === 'city' && item.city) {
+                            itemSearchValue = escapeHtml(item.city);
+                        } else {
+                            itemSearchValue = escapeHtml(item.searchValue || item.value || item.city || '');
+                        }
+                        var itemLat = item.lat ? escapeHtml(String(item.lat)) : '';
+                        var itemLng = item.lng ? escapeHtml(String(item.lng)) : '';
+                        var dataAttrs = 'data-type="' + itemType + '" data-value="' + itemValue + '" data-search-value="' + itemSearchValue + '"';
+                        if (itemLat) dataAttrs += ' data-lat="' + itemLat + '"';
+                        if (itemLng) dataAttrs += ' data-lng="' + itemLng + '"';
+                        html += '<li class="location-suggestion" ' + dataAttrs + '><span class="suggestion-icon">' + icon + '</span><span class="suggestion-primary">' + itemLabel + '</span></li>';
                     });
                     html += '</ul>';
                     autocomplete.innerHTML = html;
                     autocomplete.style.display = 'block';
+                    
+                    // On homepage, ensure autocomplete is positioned correctly and has highest z-index
+                    if (isHomepage) {
+                        autocomplete.style.zIndex = '2147483647'; // Maximum z-index value
+                        autocomplete.style.position = 'absolute';
+                        autocomplete.style.background = 'white';
+                        // Force a reflow to ensure styles are applied
+                        autocomplete.offsetHeight;
+                    }
                 };
                 
                 // Handle input typing
@@ -529,6 +872,7 @@ class Maloney_Listings_Blocks {
                 input.addEventListener('input', function() {
                     selectedSearchValue = null; // Clear selected value on new input
                     selectedEntryType = null; // Clear selected entry type on new input
+                    selectedCoordinates = null; // Clear selected coordinates on new input
                     clearTimeout(inputTimeout);
                     var query = input.value.trim();
                     if (query.length < 1) {
@@ -541,16 +885,52 @@ class Maloney_Listings_Blocks {
                     }, 150);
                 });
                 
-                // Handle suggestion click
+                // Handle suggestion click - just select, don't submit
+                autocomplete.addEventListener('mousedown', function(e) {
+                    e.preventDefault(); // Prevent input blur
+                    var li = e.target.closest('.location-suggestion');
+                    if (li) {
+                        var searchValue = li.getAttribute('data-search-value');
+                        var entryType = li.getAttribute('data-type');
+                        var dataValue = li.getAttribute('data-value');
+                        var dataLat = li.getAttribute('data-lat');
+                        var dataLng = li.getAttribute('data-lng');
+                        input.value = li.querySelector('.suggestion-primary').textContent;
+                        // Use data-value (city name) if available, otherwise use searchValue
+                        selectedSearchValue = dataValue || searchValue;
+                        selectedEntryType = entryType; // Store the entry type (city, zip, or address)
+                        // Store coordinates if available
+                        if (dataLat && dataLng) {
+                            selectedCoordinates = { lat: parseFloat(dataLat), lng: parseFloat(dataLng) };
+                        } else {
+                            selectedCoordinates = null;
+                        }
+                        autocomplete.style.display = 'none';
+                        // Don't submit - let user click search button or change tabs
+                    }
+                });
+                
+                // Also handle click for better compatibility
                 autocomplete.addEventListener('click', function(e) {
                     var li = e.target.closest('.location-suggestion');
                     if (li) {
                         var searchValue = li.getAttribute('data-search-value');
                         var entryType = li.getAttribute('data-type');
+                        var dataValue = li.getAttribute('data-value');
+                        var dataLat = li.getAttribute('data-lat');
+                        var dataLng = li.getAttribute('data-lng');
                         input.value = li.querySelector('.suggestion-primary').textContent;
-                        selectedSearchValue = searchValue;
-                        selectedEntryType = entryType; // Store the entry type (city, zip, or address)
+                        // Use data-value (city name) if available, otherwise use searchValue
+                        selectedSearchValue = dataValue || searchValue;
+                        selectedEntryType = entryType;
+                        // Store coordinates if available
+                        if (dataLat && dataLng) {
+                            selectedCoordinates = { lat: parseFloat(dataLat), lng: parseFloat(dataLng) };
+                        } else {
+                            selectedCoordinates = null;
+                        }
                         autocomplete.style.display = 'none';
+                        // Don't submit - let user click search button or change tabs
                     }
                 });
                 
@@ -558,7 +938,7 @@ class Maloney_Listings_Blocks {
                 input.addEventListener('blur', function() {
                     setTimeout(function() {
                         autocomplete.style.display = 'none';
-                    }, 200);
+                    }, 300); // Increased delay for better click handling
                 });
                 
                 // Handle tab clicks
@@ -587,33 +967,75 @@ class Maloney_Listings_Blocks {
                         return;
                     }
                     
+                    // Get coordinates from selectedCoordinates
+                    var selectedLat = selectedCoordinates ? selectedCoordinates.lat : null;
+                    var selectedLng = selectedCoordinates ? selectedCoordinates.lng : null;
+                    
                     // Build URL
                     var archiveUrl = '<?php echo esc_js($archive_url); ?>';
                     var url = new URL(archiveUrl, window.location.origin);
                     
-                    // Add type parameter if tabs are shown
+                    // Add type parameter if tabs are shown - ALWAYS get from active tab to ensure accuracy
                     <?php if ($show_tabs) : ?>
-                    if (selectedType) {
+                    // ALWAYS get the type from the currently active tab (don't rely on selectedType variable)
+                    var activeTab = block.querySelector('.maloney-search-tab.active');
+                    if (activeTab) {
+                        var tabType = activeTab.getAttribute('data-type');
+                        if (tabType) {
+                            url.searchParams.set('type', tabType);
+                        }
+                    } else if (selectedType) {
+                        // Fallback to selectedType if no active tab found
                         url.searchParams.set('type', selectedType);
                     }
                     <?php endif; ?>
                     
                     // Add location parameter based on entry type
-                    if (entryType === 'zip') {
-                        // For zip codes, use 'zip' parameter
-                        url.searchParams.set('zip', searchValue);
-                    } else if (entryType === 'address') {
-                        // For addresses, pass as 'city' parameter - the listings page will geocode it
-                        // The searchLocation function will handle full addresses
+                    // On homepage, always use 'city' parameter (no zip codes)
+                    if (isHomepage) {
+                        // Clean city name - remove special chars and use space-separated format
                         url.searchParams.set('city', searchValue);
+                        // Add coordinates if available for proximity search and map zoom
+                        if (selectedLat && selectedLng) {
+                            url.searchParams.set('lat', selectedLat);
+                            url.searchParams.set('lng', selectedLng);
+                            // Add zoom parameter for better map centering - use 16 for city searches (much closer zoom)
+                            url.searchParams.set('zoom', '16');
+                        }
                     } else {
-                        // For city or default, use 'city' parameter
-                        // Also check if it looks like a zip code (fallback)
-                        var isZip = /^\d{5}(-\d{4})?$/.test(searchValue);
-                        if (isZip) {
+                        // Not homepage - handle zip codes and addresses
+                        if (entryType === 'zip') {
+                            // For zip codes, use 'zip' parameter
                             url.searchParams.set('zip', searchValue);
-                        } else {
+                            if (selectedLat && selectedLng) {
+                                url.searchParams.set('lat', selectedLat);
+                                url.searchParams.set('lng', selectedLng);
+                            }
+                        } else if (entryType === 'address') {
+                            // For addresses, pass as 'city' parameter - the listings page will geocode it
+                            // The searchLocation function will handle full addresses
                             url.searchParams.set('city', searchValue);
+                            if (selectedLat && selectedLng) {
+                                url.searchParams.set('lat', selectedLat);
+                                url.searchParams.set('lng', selectedLng);
+                            }
+                        } else {
+                            // For city or default, use 'city' parameter
+                            // Also check if it looks like a zip code (fallback)
+                            var isZip = /^\d{5}(-\d{4})?$/.test(searchValue);
+                            if (isZip) {
+                                url.searchParams.set('zip', searchValue);
+                                if (selectedLat && selectedLng) {
+                                    url.searchParams.set('lat', selectedLat);
+                                    url.searchParams.set('lng', selectedLng);
+                                }
+                            } else {
+                                url.searchParams.set('city', searchValue);
+                                if (selectedLat && selectedLng) {
+                                    url.searchParams.set('lat', selectedLat);
+                                    url.searchParams.set('lng', selectedLng);
+                                }
+                            }
                         }
                     }
                     
@@ -621,12 +1043,16 @@ class Maloney_Listings_Blocks {
                     window.location.href = url.toString();
                 });
                 
-                // Handle Enter key
+                // Handle Enter key - submit form
                 input.addEventListener('keypress', function(e) {
                     if (e.which === 13) {
                         e.preventDefault();
-                        form.dispatchEvent(new Event('submit'));
                         autocomplete.style.display = 'none';
+                        // If no selectedSearchValue, use input value
+                        if (!selectedSearchValue) {
+                            selectedSearchValue = input.value.trim();
+                        }
+                        form.dispatchEvent(new Event('submit'));
                     }
                 });
             });

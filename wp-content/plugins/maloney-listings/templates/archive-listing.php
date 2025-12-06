@@ -243,8 +243,6 @@ $zip_codes = $wpdb->get_col("
                             <div class="filter-popover-options filter-button-group">
                                 <label class="filter-option-button"><input type="checkbox" name="condo_status[]" value="1" class="auto-filter-checkbox" /><span>FCFS Condo Sales</span></label>
                                 <label class="filter-option-button"><input type="checkbox" name="condo_status[]" value="2" class="auto-filter-checkbox" /><span>Active Condo Lottery</span></label>
-                                <label class="filter-option-button"><input type="checkbox" name="condo_status[]" value="3" class="auto-filter-checkbox" /><span>Closed Condo Lottery</span></label>
-                                <label class="filter-option-button"><input type="checkbox" name="condo_status[]" value="4" class="auto-filter-checkbox" /><span>Inactive Condo Property</span></label>
                                 <label class="filter-option-button"><input type="checkbox" name="condo_status[]" value="5" class="auto-filter-checkbox" /><span>Upcoming Condo</span></label>
                             </div>
                         </div>
@@ -402,6 +400,19 @@ $zip_codes = $wpdb->get_col("
                     'key' => '_listing_longitude',
                     'compare' => 'EXISTS',
                 ),
+                // Exclude condos with status 3 & 4
+                array(
+                    'relation' => 'OR',
+                    array(
+                        'key' => 'wpcf-condo-status',
+                        'value' => array('3', '4'),
+                        'compare' => 'NOT IN',
+                    ),
+                    array(
+                        'key' => 'wpcf-condo-status',
+                        'compare' => 'NOT EXISTS',
+                    ),
+                ),
             ),
         );
         $all_listings_query = new WP_Query($all_listings_args);
@@ -436,6 +447,8 @@ $zip_codes = $wpdb->get_col("
                             $is_rental = true;
                         }
                     }
+                    
+                    // Note: Condos with status 3 & 4 are excluded via meta_query in all_listings_args
                     
                     $status_value = '';
                     if ($is_condo) {
@@ -632,31 +645,41 @@ $zip_codes = $wpdb->get_col("
                 <div id="active-filters" class="active-filters"></div>
             </div>
             
+            <?php
+            // Show no-listings-found message first if no results (above listings-grid)
+            if (!have_posts()) :
+                ?>
+                <div class="no-listings-found">
+                    <p><?php _e('No listings found.', 'maloney-listings'); ?></p>
+                    <a href="#" class="reset-filters-link" id="reset-filters-link"><?php _e('Reset Filters', 'maloney-listings'); ?></a>
+                </div>
+            <?php endif; ?>
+            
             <div class="listings-cards-scroll" id="listings-grid">
                 <?php
                 if (have_posts()) :
                     while (have_posts()) : the_post();
                         include MALONEY_LISTINGS_PLUGIN_DIR . 'templates/listing-card.php';
                     endwhile;
-                else :
-                    ?>
-            <div class="no-listings-found">
-                <p><?php _e('No listings found.', 'maloney-listings'); ?></p>
-                <a href="#" class="reset-filters-link" id="reset-filters-link"><?php _e('Reset Filters', 'maloney-listings'); ?></a>
-            </div>
-                <?php endif; ?>
+                endif;
+                ?>
                 
-                <div class="listings-pagination" id="listings-pagination">
-                    <?php
-                    if ($wp_query->found_posts > 0 && $wp_query->max_num_pages > 1) {
+                <?php
+                // Only show pagination if there are multiple pages
+                if ($wp_query->found_posts > 0 && $wp_query->max_num_pages > 1) :
+                    ?>
+                    <div class="listings-pagination" id="listings-pagination">
+                        <?php
                         echo paginate_links(array(
                             'total' => $wp_query->max_num_pages,
                             'prev_text' => __('&laquo; Previous', 'maloney-listings'),
                             'next_text' => __('Next &raquo;', 'maloney-listings'),
                         ));
-                    }
-                    ?>
-                </div>
+                        ?>
+                    </div>
+                <?php else : ?>
+                    <div class="listings-pagination" id="listings-pagination" style="display:none;"></div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
