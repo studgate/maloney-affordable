@@ -40,8 +40,8 @@ class Maloney_Listings_Custom_Fields {
         // Clear Toolset template cache when key fields change so conditions are re-evaluated
         add_action('save_post_listing', array($this, 'clear_toolset_template_cache'), 20);
 
-        // DISABLED: Auto-assign field groups - users should use Toolset's native interface
-        // add_action('admin_init', array($this, 'auto_assign_field_groups'), 1);
+        // Auto-assign field groups on plugin activation or when requested
+        add_action('admin_init', array($this, 'auto_assign_field_groups_on_demand'), 1);
         
         // Filter Toolset field groups server-side based on listing type
         // Priority 1 ensures this runs before Toolset's own conditional logic
@@ -178,37 +178,159 @@ class Maloney_Listings_Custom_Fields {
         }
     
     /**
-     * Auto-assign known Toolset field groups to listing post type
+     * Auto-assign field groups on demand (when requested via admin action or on first load)
+     */
+    public function auto_assign_field_groups_on_demand() {
+        // Only run if explicitly requested or if option is set
+        $auto_assign = get_option('ml_auto_assign_field_groups', false);
+        $manual_request = isset($_GET['ml_auto_assign_groups']) && check_admin_referer('ml_auto_assign_groups');
+        
+        if (!$auto_assign && !$manual_request) {
+            return; // Don't run automatically unless requested
+        }
+        
+        $result = $this->auto_assign_field_groups();
+        
+        if ($manual_request) {
+            // Redirect back with success message
+            $redirect_url = add_query_arg(array(
+                'page' => 'listings-management',
+                'ml_groups_assigned' => $result['assigned'],
+                'ml_groups_found' => $result['found'],
+            ), admin_url('edit.php?post_type=listing'));
+            wp_safe_redirect($redirect_url);
+            exit;
+        }
+    }
+    
+    /**
+     * Auto-assign Toolset field groups to listing post type by name
      * 
-     * Ensures that Condo Lotteries, Condominiums, Rental Lotteries, and Rental Properties
-     * field groups are assigned to the 'listing' post type so they appear in the editor.
+     * Finds field groups by name (not hardcoded IDs) and assigns them to 'listing' post type.
+     * This works across different databases where group IDs may differ.
+     * 
+     * @return array Results with 'assigned' count and 'found' count
      */
     public function auto_assign_field_groups() {
-        // Known Toolset field group IDs
-        // 361 = Condo Lotteries, 166 = Condominiums, 11 = Rental Lotteries, 183 = Rental Properties
-        $group_ids = array(361, 166, 11, 183);
+        $field_group_names = array(
+            'Property Info',
+            'Condo Lotteries',
+            'Condominiums',
+            'Rental Lotteries',
+            'Rental Properties',
+            'Current Rental Availability',
+            'Current Condo Listings',
+        );
         
-        if (class_exists('Toolset_Field_Group_Post_Factory')) {
-            $factory = Toolset_Field_Group_Post_Factory::get_instance();
-            foreach ($group_ids as $group_id) {
-                try {
-                    $group = $factory->load($group_id);
-                    if ($group) {
-                        $assigned_types = $group->get_assigned_to_types();
+        $assigned_count = 0;
+        $found_count = 0;
+        
+        // Try using Toolset_Helpers if available
+        if (class_exists('Maloney_Listings_Toolset_Helpers')) {
+            $all_groups = Maloney_Listings_Toolset_Helpers::get_field_groups();
+            
+            foreach ($all_groups as $group_data) {
+                $group_name = isset($group_data['name']) ? $group_data['name'] : '';
+                $group_obj = isset($group_data['group_object']) ? $group_data['group_object'] : null;
+                
+                // Check if this group name matches one we're looking for
+                $should_assign = false;
+                foreach ($field_group_names as $target_name) {
+                    if (stripos($group_name, $target_name) !== false || 
+                        strtolower(trim($group_name)) === strtolower(trim($target_name))) {
+                        $should_assign = true;
+                        $found_count++;
+                        break;
+                    }
+                }
+                
+                if ($should_assign && $group_obj) {
+                    try {
+                        // Get current assigned types
+                        $assigned_types = isset($group_data['types']) ? $group_data['types'] : array();
+                        
+                        // If not already assigned to 'listing', assign it
                         if (!in_array('listing', $assigned_types)) {
-                            if (method_exists($group, 'assign_to_type')) {
-                                $group->assign_to_type('listing');
-                            } elseif (method_exists($group, 'set_assigned_to_types')) {
+                            // Try different methods depending on Toolset API version
+                            if (is_object($group_obj) && method_exists($group_obj, 'assign_to_type')) {
+                                $group_obj->assign_to_type('listing');
+                                $assigned_count++;
+                            } elseif (is_object($group_obj) && method_exists($group_obj, 'set_assigned_to_types')) {
                                 $assigned_types[] = 'listing';
-                                $group->set_assigned_to_types($assigned_types);
+                                $group_obj->set_assigned_to_types($assigned_types);
+                                $assigned_count++;
+                            } elseif (class_exists('Toolset_Field_Group_Post_Factory')) {
+                                // Fallback: use factory to load and assign
+                                $factory = Toolset_Field_Group_Post_Factory::get_instance();
+                                $group_id = isset($group_data['id']) ? $group_data['id'] : null;
+                                if ($group_id) {
+                                    $group = $factory->load($group_id);
+                                    if ($group) {
+                                        $current_types = $group->get_assigned_to_types();
+                                        if (!in_array('listing', $current_types)) {
+                                            if (method_exists($group, 'assign_to_type')) {
+                                                $group->assign_to_type('listing');
+                                                $assigned_count++;
+                                            } elseif (method_exists($group, 'set_assigned_to_types')) {
+                                                $current_types[] = 'listing';
+                                                $group->set_assigned_to_types($current_types);
+                                                $assigned_count++;
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
+                    } catch (Exception $e) {
+                        // Ignore errors for individual groups
+                        error_log('Error assigning field group "' . $group_name . '": ' . $e->getMessage());
                     }
-                } catch (Exception $e) {
-                    // Ignore errors
+                }
+            }
+        } else {
+            // Fallback: Try using Toolset API directly
+            if (class_exists('Toolset_Field_Group_Post_Factory')) {
+                $factory = Toolset_Field_Group_Post_Factory::get_instance();
+                
+                // Get all field groups
+                if (function_exists('toolset_get_field_groups')) {
+                    try {
+                        $all_groups = toolset_get_field_groups(array('domain' => 'posts'));
+                        foreach ($all_groups as $group) {
+                            $group_name = $group->get_display_name();
+                            
+                            // Check if this group should be assigned
+                            foreach ($field_group_names as $target_name) {
+                                if (stripos($group_name, $target_name) !== false || 
+                                    strtolower(trim($group_name)) === strtolower(trim($target_name))) {
+                                    $found_count++;
+                                    
+                                    $assigned_types = $group->get_assigned_to_types();
+                                    if (!in_array('listing', $assigned_types)) {
+                                        if (method_exists($group, 'assign_to_type')) {
+                                            $group->assign_to_type('listing');
+                                            $assigned_count++;
+                                        } elseif (method_exists($group, 'set_assigned_to_types')) {
+                                            $assigned_types[] = 'listing';
+                                            $group->set_assigned_to_types($assigned_types);
+                                            $assigned_count++;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (Exception $e) {
+                        error_log('Error getting field groups: ' . $e->getMessage());
+                    }
                 }
             }
         }
+        
+        return array(
+            'assigned' => $assigned_count,
+            'found' => $found_count,
+        );
     }
     
     /**
@@ -599,6 +721,29 @@ class Maloney_Listings_Custom_Fields {
             'side',
             'high'
         );
+        
+        // Hide listing_type taxonomy meta box after post is created
+        add_action('add_meta_boxes', array($this, 'hide_listing_type_taxonomy_meta_box'), 100);
+    }
+    
+    /**
+     * Hide listing_type taxonomy meta box after post is created
+     * This prevents users from changing the listing type after creation
+     */
+    public function hide_listing_type_taxonomy_meta_box() {
+        global $post;
+        
+        if (!$post || $post->post_type !== 'listing') {
+            return;
+        }
+        
+        // Only hide if listing type is already set and post has been saved
+        if (!empty($post->ID) && $post->post_status !== 'auto-draft') {
+            $listing_type_terms = wp_get_post_terms($post->ID, 'listing_type');
+            if (!empty($listing_type_terms)) {
+                remove_meta_box('tagsdiv-listing_type', 'listing', 'side');
+            }
+        }
     }
     
     /**
@@ -633,15 +778,27 @@ class Maloney_Listings_Custom_Fields {
                 <strong><?php _e('Unit Type', 'maloney-listings'); ?></strong>
             </label>
         </p>
+        <?php
+        // Check if listing type is already set (post is not new)
+        // Lock if listing type exists and post has been saved at least once
+        $is_locked = !empty($current_type) && !empty($post->ID) && $post->post_status !== 'auto-draft';
+        ?>
         <p>
-            <select id="listing_unit_type" name="listing_unit_type" required style="width: 100%;">
+            <select id="listing_unit_type" name="listing_unit_type" required style="width: 100%;" <?php echo $is_locked ? 'disabled' : ''; ?>>
                 <option value=""><?php _e('Select Type (Required)', 'maloney-listings'); ?></option>
                 <option value="condo" <?php selected($unit_type, 'condo'); ?>><?php _e('Condo', 'maloney-listings'); ?></option>
                 <option value="rental" <?php selected($unit_type, 'rental'); ?>><?php _e('Rental', 'maloney-listings'); ?></option>
             </select>
+            <?php if ($is_locked) : ?>
+                <input type="hidden" name="listing_unit_type" value="<?php echo esc_attr($unit_type); ?>" />
+            <?php endif; ?>
         </p>
         <p class="description">
-            <strong><?php _e('Required:', 'maloney-listings'); ?></strong> <?php _e('You must select a unit type. This will hide irrelevant fields (Condo fields hide for Rentals, Rental fields hide for Condos).', 'maloney-listings'); ?>
+            <?php if ($is_locked) : ?>
+                <strong style="color: #d63638;"><?php _e('Locked:', 'maloney-listings'); ?></strong> <?php _e('The listing type cannot be changed after creation because it determines which field groups are displayed. To change the type, create a new listing.', 'maloney-listings'); ?>
+            <?php else : ?>
+                <strong><?php _e('Required:', 'maloney-listings'); ?></strong> <?php _e('You must select a unit type. This will hide irrelevant fields (Condo fields hide for Rentals, Rental fields hide for Condos). Once saved, this cannot be changed.', 'maloney-listings'); ?>
+            <?php endif; ?>
         </p>
         <script>
         jQuery(document).ready(function($) {

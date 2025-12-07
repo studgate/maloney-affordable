@@ -251,18 +251,37 @@ class Maloney_Listings_Available_Units_Migration {
             $best_match = null;
             $best_score = 0;
             
+            // Normalize the search term for comparison
+            $normalized_search = strtolower($this->normalize_property_name($property_name));
+            
             foreach ($posts as $post) {
                 $post_title_lower = strtolower($post->post_title);
+                $normalized_post = strtolower($this->normalize_property_name($post->post_title));
                 
-                // Exact match
+                // Exact match (original)
                 if ($post_title_lower === $property_name_lower) {
                     return $post;
                 }
                 
-                // Check if property name contains post title or vice versa
+                // Exact match (normalized)
+                if ($normalized_post === $normalized_search) {
+                    return $post;
+                }
+                
+                // Check if normalized versions contain each other
+                if (stripos($normalized_post, $normalized_search) !== false || 
+                    stripos($normalized_search, $normalized_post) !== false) {
+                    // Calculate similarity score on normalized versions
+                    similar_text($normalized_search, $normalized_post, $score);
+                    if ($score > $best_score) {
+                        $best_score = $score;
+                        $best_match = $post;
+                    }
+                }
+                
+                // Also check original versions for substring match
                 if (stripos($post_title_lower, $property_name_lower) !== false || 
                     stripos($property_name_lower, $post_title_lower) !== false) {
-                    // Calculate similarity score
                     similar_text($property_name_lower, $post_title_lower, $score);
                     if ($score > $best_score) {
                         $best_score = $score;
@@ -271,12 +290,28 @@ class Maloney_Listings_Available_Units_Migration {
                 }
             }
             
-            if ($best_match && $best_score > 60) {
+            // Lower threshold for better matching (50% instead of 60%)
+            if ($best_match && $best_score > 50) {
                 return $best_match;
             }
             
-            // Return first result if no good match found
-            return $posts[0];
+            // If no substring match, try similarity on all posts (normalized)
+            if (!$best_match) {
+                foreach ($posts as $post) {
+                    $normalized_post = strtolower($this->normalize_property_name($post->post_title));
+                    similar_text($normalized_search, $normalized_post, $score);
+                    if ($score > $best_score) {
+                        $best_score = $score;
+                        $best_match = $post;
+                    }
+                }
+                if ($best_match && $best_score > 50) {
+                    return $best_match;
+                }
+            }
+            
+            // Return first result if no good match found (more lenient)
+            return !empty($posts) ? $posts[0] : null;
         }
         
         return null;
@@ -286,6 +321,45 @@ class Maloney_Listings_Available_Units_Migration {
      * Normalize property name for better matching
      */
     private function normalize_property_name($name) {
+        $name = trim($name);
+        
+        // Normalize parentheses to commas (e.g., "Ropewalk (Phase 2)" -> "Ropewalk, Phase 2")
+        $name = preg_replace('/\s*\(\s*/', ', ', $name);
+        $name = preg_replace('/\s*\)\s*/', '', $name);
+        
+        // Normalize street suffixes (Street, St, St., etc. -> St)
+        $street_suffixes = array(
+            '/\s+street\s*$/i' => ' St',
+            '/\s+st\.\s*$/i' => ' St',
+            '/\s+st\s*$/i' => ' St',
+            '/\s+avenue\s*$/i' => ' Ave',
+            '/\s+ave\.\s*$/i' => ' Ave',
+            '/\s+ave\s*$/i' => ' Ave',
+            '/\s+boulevard\s*$/i' => ' Blvd',
+            '/\s+blvd\.\s*$/i' => ' Blvd',
+            '/\s+blvd\s*$/i' => ' Blvd',
+            '/\s+road\s*$/i' => ' Rd',
+            '/\s+rd\.\s*$/i' => ' Rd',
+            '/\s+rd\s*$/i' => ' Rd',
+            '/\s+drive\s*$/i' => ' Dr',
+            '/\s+dr\.\s*$/i' => ' Dr',
+            '/\s+dr\s*$/i' => ' Dr',
+        );
+        foreach ($street_suffixes as $pattern => $replacement) {
+            $name = preg_replace($pattern, $replacement, $name);
+        }
+        
+        // Remove common suffixes/prefixes for better matching
+        $name = preg_replace('/\s+(apartments?|apts?|condominium|condo|properties?|property|residences?|residential|community|communities)\s*$/i', '', $name);
+        $name = trim($name);
+        
+        // Remove "The" prefix for matching
+        $name = preg_replace('/^the\s+/i', '', $name);
+        $name = trim($name);
+        
+        // Normalize multiple spaces and commas
+        $name = preg_replace('/\s*,\s*/', ', ', $name);
+        $name = preg_replace('/\s+/', ' ', $name);
         $name = trim($name);
         
         // Common variations
@@ -485,4 +559,5 @@ class Maloney_Listings_Available_Units_Migration {
         return $this->results;
     }
 }
+
 

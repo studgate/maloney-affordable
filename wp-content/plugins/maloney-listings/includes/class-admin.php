@@ -114,32 +114,35 @@ class Maloney_Listings_Admin {
                 array($this, 'render_management_page')
             );
             
-            add_submenu_page(
-                'edit.php?post_type=listing',
-                __('Vacancy Notifications', 'maloney-listings'),
-                __('Vacancy Notifications', 'maloney-listings'),
-                'manage_options',
-                'vacancy-notifications',
-                array($this, 'render_vacancy_notifications_page')
-            );
+            // DISABLED: Vacancy Notifications
+            // add_submenu_page(
+            //     'edit.php?post_type=listing',
+            //     __('Vacancy Notifications', 'maloney-listings'),
+            //     __('Vacancy Notifications', 'maloney-listings'),
+            //     'manage_options',
+            //     'vacancy-notifications',
+            //     array($this, 'render_vacancy_notifications_page')
+            // );
             
-            add_submenu_page(
-                'edit.php?post_type=listing',
-                __('Field Discovery', 'maloney-listings'),
-                __('Field Discovery', 'maloney-listings'),
-                'manage_options',
-                'field-discovery',
-                array($this, 'render_field_discovery_page')
-            );
+            // DISABLED: Field Discovery
+            // add_submenu_page(
+            //     'edit.php?post_type=listing',
+            //     __('Field Discovery', 'maloney-listings'),
+            //     __('Field Discovery', 'maloney-listings'),
+            //     'manage_options',
+            //     'field-discovery',
+            //     array($this, 'render_field_discovery_page')
+            // );
             
-            add_submenu_page(
-                'edit.php?post_type=listing',
-                __('Migrate Existing Condos and Rental Properties', 'maloney-listings'),
-                __('Migrate Existing Condos and Rental Properties', 'maloney-listings'),
-                'manage_options',
-                'migrate-listings',
-                array($this, 'render_migration_page')
-            );
+            // DISABLED: Fix Toolset Meta
+            // add_submenu_page(
+            //     'edit.php?post_type=listing',
+            //     __('Fix Toolset Meta', 'maloney-listings'),
+            //     __('Fix Toolset Meta', 'maloney-listings'),
+            //     'manage_options',
+            //     'fix-toolset-meta',
+            //     array($this, 'render_fix_toolset_meta_page')
+            // );
             
             add_submenu_page(
                 'edit.php?post_type=listing',
@@ -148,15 +151,6 @@ class Maloney_Listings_Admin {
                 'manage_options',
                 'extract-zip-codes',
                 array($this, 'render_extract_zip_codes_page')
-            );
-            
-            add_submenu_page(
-                'edit.php?post_type=listing',
-                __('Fix Toolset Meta', 'maloney-listings'),
-                __('Fix Toolset Meta', 'maloney-listings'),
-                'manage_options',
-                'fix-toolset-meta',
-                array($this, 'render_fix_toolset_meta_page')
             );
             
             add_submenu_page(
@@ -179,21 +173,24 @@ class Maloney_Listings_Admin {
             
         }
         
-        // Visible to all admins
-        add_submenu_page(
-            'edit.php?post_type=listing',
-            __('Geocode Addresses', 'maloney-listings'),
-            __('Geocode Addresses', 'maloney-listings'),
-            'manage_options',
-            'geocode-addresses',
-            array($this, 'render_geocode_page')
-        );
-        
         // Add "Current Availability" under "Add New Listing" using admin_menu filter
         add_action('admin_menu', array($this, 'add_current_availability_menu'), 100);
         // Add "Current Condo Listings" under "Add New Listing" using admin_menu filter
         add_action('admin_menu', array($this, 'add_current_condo_listings_menu'), 100);
         
+        // Migrate Existing Condos and Rental Properties - after Add New (position 2)
+        if ($this->is_developer()) {
+            add_submenu_page(
+                'edit.php?post_type=listing',
+                __('Migrate Existing Condos and Rental Properties', 'maloney-listings'),
+                __('Migrate Existing Condos and Rental Properties', 'maloney-listings'),
+                'manage_options',
+                'migrate-listings',
+                array($this, 'render_migration_page')
+            );
+        }
+        
+        // Migrate Available Units - after Current Availability (position 4)
         add_submenu_page(
             'edit.php?post_type=listing',
             __('Migrate Available Units', 'maloney-listings'),
@@ -203,7 +200,7 @@ class Maloney_Listings_Admin {
             array($this, 'render_available_units_migration_page')
         );
         
-        // Migrate Condo Listings - Developer only
+        // Migrate Condo Listings - after Current Condo Listings (position 5)
         if ($this->is_developer()) {
             add_submenu_page(
                 'edit.php?post_type=listing',
@@ -214,52 +211,105 @@ class Maloney_Listings_Admin {
                 array($this, 'render_condo_listings_migration_page')
             );
         }
-
-        // Removed: Index Health, Debug Listing, and Diagnostics pages (development tools, not needed in production)
+        
+        // Geocode Addresses - after Current Condo Listings (position 6)
+        add_submenu_page(
+            'edit.php?post_type=listing',
+            __('Geocode Addresses', 'maloney-listings'),
+            __('Geocode Addresses', 'maloney-listings'),
+            'manage_options',
+            'geocode-addresses',
+            array($this, 'render_geocode_page')
+        );
+        
+        // Reorder menu items using admin_menu filter (late priority to run after all items are added)
+        add_action('admin_menu', array($this, 'reorder_listings_menu'), 999);
+    }
+    
+    /**
+     * Reorder listings menu items
+     */
+    public function reorder_listings_menu() {
+        global $submenu;
+        
+        $parent_slug = 'edit.php?post_type=listing';
+        if (!isset($submenu[$parent_slug])) {
+            return;
+        }
+        
+        // Define desired order (menu slugs)
+        $order = array(
+            'edit.php?post_type=listing', // All Listings
+            'post-new.php?post_type=listing', // Add New
+            'add-current-availability', // Current Availability
+            'migrate-listings', // Migrate Existing Condos and Rental Properties
+            'add-current-condo-listings', // Current Condo Listings
+            'migrate-available-units', // Migrate Available Units
+            'migrate-condo-listings', // Migrate Condo Listings
+            'geocode-addresses', // Geocode Addresses
+            'listings-management', // Manage Listings
+            'extract-zip-codes', // Extract Zip Codes
+            'setup-toolset-templates', // Setup Toolset Templates
+            'template-blocks', // Template Blocks
+            'listings-settings', // Settings
+        );
+        
+        $ordered = array();
+        $unordered = array();
+        $found_slugs = array();
+        
+        // First, add items in desired order
+        foreach ($order as $slug) {
+            foreach ($submenu[$parent_slug] as $key => $item) {
+                if ($item[2] === $slug) {
+                    $ordered[] = $item;
+                    $found_slugs[] = $slug;
+                    unset($submenu[$parent_slug][$key]);
+                }
+            }
+        }
+        
+        // Then add remaining items (not in the order list)
+        foreach ($submenu[$parent_slug] as $item) {
+            if (!in_array($item[2], $found_slugs)) {
+                $unordered[] = $item;
+            }
+        }
+        
+        // Combine ordered and unordered
+        $submenu[$parent_slug] = array_merge($ordered, $unordered);
     }
     
     /**
      * Add Current Availability menu item under "Add New Listing"
      */
     public function add_current_availability_menu() {
-        global $submenu;
-        
-        // Find the "Add New" menu item for listing post type
         $parent_slug = 'edit.php?post_type=listing';
-        if (isset($submenu[$parent_slug])) {
-            // Add after "Add New" (usually position 1)
-            add_submenu_page(
-                $parent_slug,
-                __('Current Availability', 'maloney-listings'),
-                __('Current Availability', 'maloney-listings'),
-                'manage_options',
-                'add-current-availability',
-                array($this, 'render_add_availability_page'),
-                2 // Position after "Add New"
-            );
-        }
+        // Add after "Add New" (position 2)
+        add_submenu_page(
+            $parent_slug,
+            __('Current Availability', 'maloney-listings'),
+            __('Current Availability', 'maloney-listings'),
+            'manage_options',
+            'add-current-availability',
+            array($this, 'render_add_availability_page')
+        );
     }
     
     /**
      * Add Current Condo Listings menu item under "Add New Listing"
      */
     public function add_current_condo_listings_menu() {
-        global $submenu;
-        
-        // Find the "Add New" menu item for listing post type
         $parent_slug = 'edit.php?post_type=listing';
-        if (isset($submenu[$parent_slug])) {
-            // Add after "Current Availability" (usually position 3)
-            add_submenu_page(
-                $parent_slug,
-                __('Current Condo Listings', 'maloney-listings'),
-                __('Current Condo Listings', 'maloney-listings'),
-                'manage_options',
-                'add-current-condo-listings',
-                array($this, 'render_add_condo_listings_page'),
-                3 // Position after "Current Availability"
-            );
-        }
+        // Add after "Current Availability" (position 3)
+        add_submenu_page(
+            $parent_slug,
+            __('Current Condo Listings', 'maloney-listings'),
+            __('Current Condo Listings', 'maloney-listings'),
+            'manage_options',
+            'add-current-condo-listings',
+            array($this, 'render_add_condo_listings_page')
+        );
     }
     
     public function render_template_setup_page() {
@@ -5123,6 +5173,21 @@ class Maloney_Listings_Admin {
             wp_reset_postdata();
         }
         
+        // Handle auto-assign field groups
+        $assign_message = '';
+        $assign_message_type = 'info';
+        if (isset($_GET['ml_groups_assigned']) && isset($_GET['ml_groups_found'])) {
+            $assigned = intval($_GET['ml_groups_assigned']);
+            $found = intval($_GET['ml_groups_found']);
+            if ($assigned > 0) {
+                $assign_message = sprintf(__('Successfully assigned %d field group(s) to the listing post type. Found %d matching group(s).', 'maloney-listings'), $assigned, $found);
+                $assign_message_type = 'success';
+            } else {
+                $assign_message = sprintf(__('Found %d matching field group(s), but they were already assigned to the listing post type.', 'maloney-listings'), $found);
+                $assign_message_type = 'info';
+            }
+        }
+        
         ?>
         <div class="wrap">
             <h1><?php _e('Manage Template Blocks', 'maloney-listings'); ?></h1>
@@ -5132,6 +5197,59 @@ class Maloney_Listings_Admin {
                     <p><?php echo esc_html($message); ?></p>
                 </div>
             <?php endif; ?>
+            
+            <?php if ($assign_message) : ?>
+                <div class="notice notice-<?php echo esc_attr($assign_message_type); ?> is-dismissible">
+                    <p><?php echo esc_html($assign_message); ?></p>
+                </div>
+            <?php endif; ?>
+            
+            <div class="card" style="margin-bottom: 20px;">
+                <h2><?php _e('Auto-Assign Toolset Field Groups', 'maloney-listings'); ?></h2>
+                <p><?php _e('Automatically assign common Toolset field groups to the "listing" post type. This will find and assign:', 'maloney-listings'); ?></p>
+                <ul style="list-style: disc; margin-left: 20px;">
+                    <li><?php _e('Property Info', 'maloney-listings'); ?></li>
+                    <li><?php _e('Condo Lotteries', 'maloney-listings'); ?></li>
+                    <li><?php _e('Condominiums', 'maloney-listings'); ?></li>
+                    <li><?php _e('Rental Lotteries', 'maloney-listings'); ?></li>
+                    <li><?php _e('Rental Properties', 'maloney-listings'); ?></li>
+                    <li><?php _e('Current Rental Availability', 'maloney-listings'); ?></li>
+                    <li><?php _e('Current Condo Listings', 'maloney-listings'); ?></li>
+                </ul>
+                <p><strong><?php _e('Note:', 'maloney-listings'); ?></strong> <?php _e('This tool finds field groups by name, so it works across different databases. Groups that are already assigned will be skipped.', 'maloney-listings'); ?></p>
+                <form method="post" action="">
+                    <?php wp_nonce_field('auto_assign_field_groups_action', 'auto_assign_field_groups_nonce'); ?>
+                    <p class="submit">
+                        <input type="submit" name="auto_assign_field_groups" class="button button-primary" value="<?php _e('Auto-Assign Field Groups', 'maloney-listings'); ?>" />
+                    </p>
+                </form>
+                <?php
+                // Handle auto-assign field groups form submission
+                if (isset($_POST['auto_assign_field_groups']) && check_admin_referer('auto_assign_field_groups_action', 'auto_assign_field_groups_nonce')) {
+                    if (class_exists('Maloney_Listings_Custom_Fields')) {
+                        $custom_fields = new Maloney_Listings_Custom_Fields();
+                        $assign_results = $custom_fields->auto_assign_field_groups();
+                        if (!empty($assign_results) && isset($assign_results['assigned'])) {
+                            $assigned = intval($assign_results['assigned']);
+                            $found = intval($assign_results['found']);
+                            if ($assigned > 0) {
+                                echo '<div class="notice notice-success" style="margin-top: 20px;">';
+                                echo '<p><strong>' . __('Success:', 'maloney-listings') . '</strong> ' . sprintf(__('Successfully assigned %d field group(s) to the listing post type. Found %d matching group(s).', 'maloney-listings'), $assigned, $found) . '</p>';
+                                echo '</div>';
+                            } else {
+                                echo '<div class="notice notice-info" style="margin-top: 20px;">';
+                                echo '<p><strong>' . __('Info:', 'maloney-listings') . '</strong> ' . sprintf(__('Found %d matching field group(s), but they were already assigned to the listing post type.', 'maloney-listings'), $found) . '</p>';
+                                echo '</div>';
+                            }
+                        } else {
+                            echo '<div class="notice notice-info" style="margin-top: 20px;"><p>' . __('No field groups were found or assigned.', 'maloney-listings') . '</p></div>';
+                        }
+                    } else {
+                        echo '<div class="notice notice-error" style="margin-top: 20px;"><p>' . __('Custom Fields class not found.', 'maloney-listings') . '</p></div>';
+                    }
+                }
+                ?>
+            </div>
             
             <div class="card">
                 <h2><?php _e('Insert Block into Template', 'maloney-listings'); ?></h2>
@@ -5437,9 +5555,9 @@ class Maloney_Listings_Admin {
                                                 <td>
                                                     <?php if ($dry_run) : ?>
                                                         <?php if ($result['success'] && $result['found']) : ?>
-                                                            <span style="color: #d63638; font-weight: bold;"><?php _e('Found', 'maloney-listings'); ?></span>
+                                                            <span style="color: #00a32a; font-weight: bold;"><?php _e('Found', 'maloney-listings'); ?></span>
                                                         <?php elseif ($result['success']) : ?>
-                                                            <span style="color: #00a32a;"><?php _e('Not Found', 'maloney-listings'); ?></span>
+                                                            <span style="color: #d63638;"><?php _e('Not Found', 'maloney-listings'); ?></span>
                                                         <?php else : ?>
                                                             <span style="color: #d63638;"><?php echo esc_html($result['error']); ?></span>
                                                         <?php endif; ?>
@@ -5502,6 +5620,12 @@ class Maloney_Listings_Admin {
                     
                     <p class="description">
                         <?php _e('This will add the map shortcode [maloney_listing_map] after any block containing "neighborhood" in the selected templates.', 'maloney-listings'); ?>
+                    </p>
+                    
+                    <p class="description" style="margin-top: 10px; padding: 10px; background: #f0f0f1; border-left: 4px solid #2271b1;">
+                        <strong><?php _e('Template Scope Options:', 'maloney-listings'); ?></strong><br>
+                        <strong><?php _e('Only templates assigned to Listing post type:', 'maloney-listings'); ?></strong> <?php _e('This option will only process Content Templates that are currently assigned to the "Listing" post type in Toolset settings. This includes default templates and conditional templates (e.g., templates assigned based on listing type taxonomy). This is the safer option and recommended for most cases.', 'maloney-listings'); ?><br><br>
+                        <strong><?php _e('All Toolset Content Templates:', 'maloney-listings'); ?></strong> <?php _e('This option will process ALL published Toolset Content Templates in your site, regardless of which post type they are assigned to. Use this option if you want to add the map to templates that might be used for other post types or if you have templates that are not currently assigned but you want to update them anyway.', 'maloney-listings'); ?>
                     </p>
                     
                     <p class="submit">

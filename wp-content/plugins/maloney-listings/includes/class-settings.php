@@ -191,7 +191,7 @@ class Maloney_Listings_Settings {
         
         add_settings_field(
             'hide_unit_size_field',
-            __('Hide Unit Size Field', 'maloney-listings'),
+            __('Hide Unit Size Filter', 'maloney-listings'),
             array($this, 'render_hide_unit_size_field'),
             'listings-settings',
             'filter_settings'
@@ -371,7 +371,7 @@ class Maloney_Listings_Settings {
      */
     public function render_enable_bathrooms_filter_field() {
         $settings = $this->get_settings();
-        $value = isset($settings['enable_bathrooms_filter']) ? $settings['enable_bathrooms_filter'] : '0';
+        $value = isset($settings['enable_bathrooms_filter']) ? $settings['enable_bathrooms_filter'] : '1';
         ?>
         <label>
             <input type="checkbox" name="<?php echo esc_attr($this->option_name); ?>[enable_bathrooms_filter]" value="1" <?php checked($value, '1'); ?> />
@@ -386,7 +386,7 @@ class Maloney_Listings_Settings {
      */
     public function render_enable_income_limits_filter_field() {
         $settings = $this->get_settings();
-        $value = isset($settings['enable_income_limits_filter']) ? $settings['enable_income_limits_filter'] : '0';
+        $value = isset($settings['enable_income_limits_filter']) ? $settings['enable_income_limits_filter'] : '1';
         ?>
         <label>
             <input type="checkbox" name="<?php echo esc_attr($this->option_name); ?>[enable_income_limits_filter]" value="1" <?php checked($value, '1'); ?> />
@@ -420,9 +420,9 @@ class Maloney_Listings_Settings {
         ?>
         <label>
             <input type="checkbox" name="<?php echo esc_attr($this->option_name); ?>[hide_unit_size_field]" value="1" <?php checked($value, '1'); ?> />
-            <?php _e('Hide the "Unit Size" field in the Current Availability form.', 'maloney-listings'); ?>
+            <?php _e('Hide the "Unit Size" filter on the listings page', 'maloney-listings'); ?>
         </label>
-        <p class="description"><?php _e('When enabled, the Unit Size field will be hidden. Users will still be able to filter by beds and baths, and the system will automatically match available units based on the selected bedroom and bathroom counts.', 'maloney-listings'); ?></p>
+        <p class="description"><?php _e('When enabled, the "Unit Size" filter section (Studio, 1BR, 2BR, etc.) will be hidden from the Available Units filter on the listings page. Users will still be able to filter by beds and baths, and the system will automatically match available units based on the selected bedroom and bathroom counts.', 'maloney-listings'); ?></p>
         <?php
     }
     
@@ -460,8 +460,8 @@ class Maloney_Listings_Settings {
             'enable_street_view' => '1',
             'rental_color' => '#E86962',
             'condo_color' => '#E4C780',
-            'enable_bathrooms_filter' => '0', // Already unchecked by default
-            'enable_income_limits_filter' => '0', // Already unchecked by default
+            'enable_bathrooms_filter' => '1', // Checked by default
+            'enable_income_limits_filter' => '1', // Checked by default
             'enable_concessions_filter' => '0', // Disabled by default
             'hide_unit_size_field' => '0', // Show by default
             'just_listed_period' => '7',

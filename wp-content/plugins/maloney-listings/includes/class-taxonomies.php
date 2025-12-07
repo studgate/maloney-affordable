@@ -103,8 +103,8 @@ class Maloney_Listings_Taxonomies {
         $args = array(
             'hierarchical'      => false,
             'labels'            => $labels,
-            'show_ui'           => true,
-            'show_admin_column' => true,
+            'show_ui'           => false, // Hidden from sidebar but still functional
+            'show_admin_column' => false, // Hidden from admin column
             'query_var'         => true,
             'rewrite'           => array('slug' => 'amenity'),
             'show_in_rest'      => true,
@@ -149,8 +149,8 @@ class Maloney_Listings_Taxonomies {
         $args = array(
             'hierarchical'      => false,
             'labels'            => $labels,
-            'show_ui'           => true,
-            'show_admin_column' => true,
+            'show_ui'           => false, // Hidden from sidebar but still functional
+            'show_admin_column' => false, // Hidden from admin column
             'query_var'         => true,
             'rewrite'           => array('slug' => 'income-limit'),
             'show_in_rest'      => true,
@@ -216,8 +216,8 @@ class Maloney_Listings_Taxonomies {
         $args = array(
             'hierarchical'      => false,
             'labels'            => $labels,
-            'show_ui'           => true,
-            'show_admin_column' => true,
+            'show_ui'           => false, // Hidden from sidebar but still functional
+            'show_admin_column' => false, // Hidden from admin column
             'query_var'         => true,
             'rewrite'           => array('slug' => 'concession'),
             'show_in_rest'      => true,
@@ -255,8 +255,8 @@ class Maloney_Listings_Taxonomies {
         $args = array(
             'hierarchical'      => false,
             'labels'            => $labels,
-            'show_ui'           => true,
-            'show_admin_column' => true,
+            'show_ui'           => false, // Hidden from sidebar but still functional
+            'show_admin_column' => false, // Hidden from admin column
             'query_var'         => true,
             'rewrite'           => array('slug' => 'property-accessibility'),
             'show_in_rest'      => true,

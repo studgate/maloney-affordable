@@ -904,53 +904,21 @@ class Maloney_Listings_Toolset_Template_Blocks {
             }
             
             // Check if map block already exists (check for both shortcode and existing map divs)
-            $blocks = self::get_blocks($template_id);
-            if (!is_wp_error($blocks)) {
-                $has_map = false;
-                
-                // Recursively check all blocks for map
-                $check_for_map = function($blocks) use (&$check_for_map, &$has_map) {
-                    foreach ($blocks as $block) {
-                        // Check for map shortcode
-                        if (isset($block['blockName']) && $block['blockName'] === 'core/shortcode') {
-                            $content = '';
-                            if (isset($block['innerContent']) && is_array($block['innerContent'])) {
-                                $content = implode('', $block['innerContent']);
-                            } elseif (isset($block['innerContent'][0])) {
-                                $content = $block['innerContent'][0];
-                            }
-                            if (stripos($content, 'maloney_listing_map') !== false || 
-                                stripos($content, 'listing-single-map') !== false) {
-                                $has_map = true;
-                                return;
-                            }
-                        }
-                        
-                        // Check for existing map div in HTML
-                        if (isset($block['innerHTML'])) {
-                            if (stripos($block['innerHTML'], 'listing-single-map') !== false ||
-                                stripos($block['innerHTML'], 'id="listing-map') !== false ||
-                                (stripos($block['innerHTML'], 'class="listing-map') !== false && 
-                                 stripos($block['innerHTML'], 'data-lat') !== false)) {
-                                $has_map = true;
-                                return;
-                            }
-                        }
-                        
-                        // Check inner blocks
-                        if (!empty($block['innerBlocks'])) {
-                            $check_for_map($block['innerBlocks']);
-                            if ($has_map) return;
-                        }
-                    }
-                };
-                
-                $check_for_map($blocks);
-                
-                if ($has_map) {
-                    $results[$template_id] = new WP_Error('block_exists', __('Map block already exists in this template.', 'maloney-listings'));
-                    continue;
-                }
+            $template_content = $template->post_content;
+            $has_map = false;
+            
+            // Check for map shortcode in content (works for both block format and raw HTML)
+            if (stripos($template_content, 'maloney_listing_map') !== false || 
+                stripos($template_content, 'listing-single-map') !== false ||
+                stripos($template_content, 'id="listing-map') !== false ||
+                (stripos($template_content, 'class="listing-map') !== false && 
+                 stripos($template_content, 'data-lat') !== false)) {
+                $has_map = true;
+            }
+            
+            if ($has_map) {
+                $results[$template_id] = new WP_Error('block_exists', __('Map block already exists in this template.', 'maloney-listings'));
+                continue;
             }
             
             // Insert map block after neighborhood TEXT block (not the heading)
@@ -983,6 +951,44 @@ class Maloney_Listings_Toolset_Template_Blocks {
             return new WP_Error('template_not_found', __('Template not found.', 'maloney-listings'));
         }
         
+        // SIMPLER APPROACH: Use string replacement instead of block parsing
+        // This works for both top-level and nested blocks
+        $content = $template->post_content;
+        
+        // Create the shortcode block HTML
+        $shortcode = isset($block_attributes['shortcode']) ? $block_attributes['shortcode'] : '';
+        $map_block = '<!-- wp:shortcode -->' . "\n" . $shortcode . "\n" . '<!-- /wp:shortcode -->';
+        
+        // Pattern to find the neighborhood heading - look for <h3 with NEIGHBORHOOD text
+        // Match: <h3...>NEIGHBORHOOD</h3> followed by optional whitespace
+        $pattern = '/(<h3[^>]*class="[^"]*tb-heading[^"]*"[^>]*>NEIGHBORHOOD<\/h3>)(\s*)/i';
+        
+        // Check if pattern exists
+        if (preg_match($pattern, $content)) {
+            // Replace: insert map block right after the closing </h3> tag
+            $replacement = '$1' . "\n\n" . $map_block . '$2';
+            $new_content = preg_replace($pattern, $replacement, $content, 1);
+            
+            // Only update if content changed
+            if ($new_content !== $content) {
+                return self::update_template_content($template_id, $new_content);
+            } else {
+                return new WP_Error('insertion_failed', __('Could not insert map block.', 'maloney-listings'));
+            }
+        }
+        
+        // Fallback: Try case-insensitive search for any h tag with neighborhood
+        $pattern2 = '/(<h[1-6][^>]*>.*?NEIGHBORHOOD.*?<\/h[1-6]>)(\s*)/is';
+        if (preg_match($pattern2, $content)) {
+            $replacement = '$1' . "\n\n" . $map_block . '$2';
+            $new_content = preg_replace($pattern2, $replacement, $content, 1);
+            
+            if ($new_content !== $content) {
+                return self::update_template_content($template_id, $new_content);
+            }
+        }
+        
+        // If string replacement didn't work, fall back to block parsing
         $blocks = parse_blocks($template->post_content);
         if (empty($blocks)) {
             return new WP_Error('no_blocks', __('Template has no blocks.', 'maloney-listings'));
@@ -1015,38 +1021,144 @@ class Maloney_Listings_Toolset_Template_Blocks {
             'longwood',
         );
         
-        // Strategy: Find the "NEIGHBORHOOD" heading, then find the next text block after it
+        // Strategy: Recursively search for "NEIGHBORHOOD" heading in all blocks and innerBlocks
         $neighborhood_heading_index = -1;
-        $insert_after_index = -1;
-        $found = false;
+        $neighborhood_heading_path = array(); // Track path for nested blocks
         
-        // Toolset blocks heading data attribute (consistent across templates)
-        $toolset_neighborhood_heading_id = '6cd577bebf8ea4bf960b67a0baa44753';
+        // DEBUG: Log total blocks
+        error_log('DEBUG insert_map_after_neighborhood: Total blocks: ' . count($blocks));
+        error_log('DEBUG Template ID: ' . $template_id);
         
-        // First pass: Find the neighborhood heading
-        // Option 1: Search for specific Toolset data attribute (most reliable)
-        foreach ($blocks as $index => $block) {
-            $block_content = '';
+        // Recursive function to search blocks and innerBlocks
+        $search_for_neighborhood = function($blocks_to_search, $parent_index = null, $path = array()) use (&$search_for_neighborhood, &$neighborhood_heading_index, &$neighborhood_heading_path) {
+            foreach ($blocks_to_search as $index => $block) {
+                $current_path = $path;
+                $current_path[] = $index;
+                
+                $block_content = '';
+                $block_name = $block['blockName'] ?? 'unknown';
+                
+                // Get block content from all possible locations
+                if (isset($block['innerHTML'])) {
+                    $block_content = $block['innerHTML'];
+                }
+                if (isset($block['innerContent']) && is_array($block['innerContent'])) {
+                    $content_from_inner = implode('', array_filter($block['innerContent'], function($item) {
+                        return is_string($item);
+                    }));
+                    if (!empty($content_from_inner)) {
+                        $block_content .= $content_from_inner;
+                    }
+                }
+                if (isset($block['innerContent'][0]) && is_string($block['innerContent'][0])) {
+                    $block_content .= $block['innerContent'][0];
+                }
+                
+                // Also check block attributes for Toolset blocks
+                if (isset($block['attrs']['content'])) {
+                    $block_content .= $block['attrs']['content'];
+                }
+                
+                // DEBUG: Log block info
+                $content_preview = substr(strip_tags($block_content), 0, 150);
+                error_log("DEBUG Block at path [" . implode('->', $current_path) . "]: name='$block_name'");
+                error_log("DEBUG   Content preview: " . $content_preview);
+                error_log("DEBUG   Has innerHTML: " . (isset($block['innerHTML']) ? 'yes' : 'no'));
+                error_log("DEBUG   Has innerContent: " . (isset($block['innerContent']) ? 'yes' : 'no'));
+                error_log("DEBUG   Has innerBlocks: " . (!empty($block['innerBlocks']) ? 'yes (' . count($block['innerBlocks']) . ')' : 'no'));
+                
+                // Check if this block contains "NEIGHBORHOOD" (case-insensitive - checking both uppercase and lowercase)
+                $has_neighborhood = (
+                    stripos($block_content, 'neighborhood') !== false ||
+                    stripos($block_content, 'NEIGHBORHOOD') !== false ||
+                    stripos($block_content, 'Neighborhood') !== false
+                );
+                
+                if ($has_neighborhood) {
+                    error_log("DEBUG   *** FOUND 'neighborhood' text in this block! ***");
+                    
+                    // Must be a heading - check for heading indicators
+                    $is_heading = (
+                        stripos($block_content, '<h') !== false || 
+                        stripos($block_content, '<h3') !== false ||
+                        stripos($block_content, 'tb-heading') !== false ||
+                        stripos($block_name, 'heading') !== false ||
+                        stripos($block_name, 'core/heading') !== false ||
+                        stripos($block_name, 'toolset-blocks/heading') !== false
+                    );
+                    
+                    error_log("DEBUG   Is heading: " . ($is_heading ? 'YES' : 'NO'));
+                    
+                    // If it's a heading and contains "NEIGHBORHOOD", we found it
+                    if ($is_heading) {
+                        // If this is a top-level block, use its index
+                        if ($parent_index === null) {
+                            $neighborhood_heading_index = $index;
+                            $neighborhood_heading_path = $current_path;
+                            error_log("DEBUG *** FOUND NEIGHBORHOOD HEADING at top-level index: $index ***");
+                            error_log("DEBUG Full block content: " . substr($block_content, 0, 1000));
+                            return true; // Found it, stop searching
+                        } else {
+                            // It's nested - we'll need to handle this differently
+                            error_log("DEBUG *** FOUND NEIGHBORHOOD HEADING but it's nested at path: [" . implode('->', $current_path) . "] ***");
+                            $neighborhood_heading_path = $current_path;
+                            return true;
+                        }
+                    }
+                }
+                
+                // Recursively search innerBlocks
+                if (!empty($block['innerBlocks']) && is_array($block['innerBlocks'])) {
+                    error_log("DEBUG   Searching " . count($block['innerBlocks']) . " inner blocks...");
+                    if ($search_for_neighborhood($block['innerBlocks'], $parent_index === null ? $index : $parent_index, $current_path)) {
+                        return true; // Found in inner blocks
+                    }
+                }
+            }
+            return false;
+        };
+        
+        // Start the search
+        $search_for_neighborhood($blocks);
+        
+        // If we found the heading, insert right after it (before the text)
+        if ($neighborhood_heading_index >= 0) {
+            error_log("DEBUG *** INSERTING MAP after top-level block index: $neighborhood_heading_index ***");
+            error_log("DEBUG Total blocks before insertion: " . count($blocks));
             
-            if (isset($block['innerHTML'])) {
-                $block_content = $block['innerHTML'];
-            } elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
-                $block_content = implode('', $block['innerContent']);
-            } elseif (isset($block['innerContent'][0])) {
-                $block_content = $block['innerContent'][0];
+            // Insert the new block right after the neighborhood heading
+            array_splice($blocks, $neighborhood_heading_index + 1, 0, array($new_block));
+            
+            error_log("DEBUG Total blocks after insertion: " . count($blocks));
+            error_log("DEBUG New block should be at index: " . ($neighborhood_heading_index + 1));
+            
+            $new_content = serialize_blocks($blocks);
+            error_log("DEBUG Serialized content length: " . strlen($new_content));
+            
+            $result = self::update_template_content($template_id, $new_content);
+            
+            if (is_wp_error($result)) {
+                error_log("DEBUG Error updating template: " . $result->get_error_message());
+            } else {
+                error_log("DEBUG Template updated successfully");
             }
             
-            // Primary method: Check for specific Toolset data attribute
-            if (stripos($block_content, 'data-toolset-blocks-heading="' . $toolset_neighborhood_heading_id . '"') !== false) {
-                // Verify it's a heading (must have <h tag or tb-heading class)
-                if (stripos($block_content, '<h') !== false || stripos($block_content, 'tb-heading') !== false) {
-                    $neighborhood_heading_index = $index;
-                    break;
-                }
+            return $result;
+        } elseif (!empty($neighborhood_heading_path)) {
+            error_log("DEBUG *** HEADING FOUND BUT IT'S NESTED - path: [" . implode('->', $neighborhood_heading_path) . "] ***");
+            error_log("DEBUG This requires nested block insertion - not yet implemented");
+            // TODO: Handle nested block insertion
+            return new WP_Error('nested_block', __('Neighborhood heading found but it is in a nested block structure. Manual insertion may be required.', 'maloney-listings'));
+        } else {
+            error_log("DEBUG ERROR: Neighborhood heading not found in any blocks!");
+            // Log all block names for debugging
+            foreach ($blocks as $idx => $blk) {
+                error_log("DEBUG Top-level block $idx: " . ($blk['blockName'] ?? 'unknown'));
             }
         }
         
-        // Fallback: If data attribute not found, use text-based search (must be in heading)
+        // Last resort: Try to find any block containing "neighborhood" (case-insensitive) anywhere
+        // This is a broader search if the heading wasn't found
         if ($neighborhood_heading_index < 0) {
             foreach ($blocks as $index => $block) {
                 $block_content = '';
@@ -1059,108 +1171,43 @@ class Maloney_Listings_Toolset_Template_Blocks {
                     $block_content = $block['innerContent'][0];
                 }
                 
-                // Look for "NEIGHBORHOOD" text (case-insensitive)
+                // Look for "neighborhood" anywhere in the block
                 if (stripos($block_content, 'neighborhood') !== false) {
-                    // CRITICAL: Must be a heading - check for heading tags/classes first
-                    // This ensures we never match "neighborhood" text within a paragraph
-                    $is_heading = (
-                        stripos($block_content, '<h') !== false || 
-                        stripos($block_content, 'tb-heading') !== false ||
-                        (stripos($block['blockName'] ?? '', 'heading') !== false)
-                    );
-                    
-                    // Only proceed if it's confirmed to be a heading
-                    if ($is_heading) {
-                        // Additional check: verify it contains "NEIGHBORHOOD" as the main text
-                        if (preg_match('/NEIGHBORHOOD/i', $block_content)) {
-                            $neighborhood_heading_index = $index;
+                    // Found a block with "neighborhood" - insert after it
+                    // But first, try to find the next text block after this one
+                    $next_text_index = -1;
+                    for ($j = $index + 1; $j < count($blocks); $j++) {
+                        $next_block = $blocks[$j];
+                        $next_content = '';
+                        
+                        if (isset($next_block['innerHTML'])) {
+                            $next_content = $next_block['innerHTML'];
+                        } elseif (isset($next_block['innerContent']) && is_array($next_block['innerContent'])) {
+                            $next_content = implode('', $next_block['innerContent']);
+                        } elseif (isset($next_block['innerContent'][0])) {
+                            $next_content = $next_block['innerContent'][0];
+                        }
+                        
+                        $clean_next = trim(strip_tags($next_content));
+                        
+                        // If next block is a text block with content, insert after it
+                        if (strlen($clean_next) > 30 && (
+                            stripos($next_block['blockName'] ?? '', 'paragraph') !== false ||
+                            stripos($next_block['blockName'] ?? '', 'text') !== false ||
+                            stripos($next_content, '<p') !== false
+                        )) {
+                            $next_text_index = $j;
                             break;
                         }
                     }
+                    
+                    // Insert after the text block if found, otherwise after the neighborhood block
+                    $insert_index = ($next_text_index >= 0) ? $next_text_index : $index;
+                    array_splice($blocks, $insert_index + 1, 0, array($new_block));
+                    $new_content = serialize_blocks($blocks);
+                    return self::update_template_content($template_id, $new_content);
                 }
             }
-        }
-        
-        // Second pass: If we found the heading, look for the next substantial text block after it
-        if ($neighborhood_heading_index >= 0) {
-            // Start searching from the block after the heading
-            for ($i = $neighborhood_heading_index + 1; $i < count($blocks); $i++) {
-                $block = $blocks[$i];
-                $block_content = '';
-                
-                // Get block content
-                if (isset($block['innerHTML'])) {
-                    $block_content = $block['innerHTML'];
-                } elseif (isset($block['innerContent']) && is_array($block['innerContent'])) {
-                    $block_content = implode('', $block['innerContent']);
-                } elseif (isset($block['innerContent'][0])) {
-                    $block_content = $block['innerContent'][0];
-                }
-                
-                // Skip empty blocks
-                $clean_content = strip_tags($block_content);
-                $clean_content = trim($clean_content);
-                
-                if (empty($clean_content)) {
-                    continue;
-                }
-                
-                // Skip if it's another heading
-                if (stripos($block_content, '<h') !== false && 
-                    (stripos($block_content, 'FEATURES') !== false || 
-                     stripos($block_content, 'AMENITIES') !== false ||
-                     stripos($block_content, 'AVAILABILITY') !== false)) {
-                    // We've hit the next section, stop here
-                    break;
-                }
-                
-                // Check if this block contains description text patterns OR is a substantial text block
-                $has_description_text = false;
-                foreach ($neighborhood_text_patterns as $pattern) {
-                    if (stripos($block_content, $pattern) !== false || stripos($clean_content, $pattern) !== false) {
-                        $has_description_text = true;
-                        break;
-                    }
-                }
-                
-                // Check if it's a paragraph or text block
-                $is_text_block = (
-                    stripos($block['blockName'] ?? '', 'paragraph') !== false ||
-                    stripos($block['blockName'] ?? '', 'text') !== false ||
-                    stripos($block['blockName'] ?? '', 'toolset') !== false ||
-                    stripos($block_content, '<p') !== false
-                );
-                
-                // If it's a substantial text block (more than 100 characters), use it
-                // OR if it has description text and is more than 30 characters
-                if (strlen($clean_content) > 100) {
-                    // Substantial text block - insert after it
-                    $insert_after_index = $i;
-                    $found = true;
-                    // Continue to find the LAST such block (in case there are multiple paragraphs)
-                } elseif ($has_description_text && strlen($clean_content) > 30) {
-                    // Has description text and is substantial
-                    $insert_after_index = $i;
-                    $found = true;
-                }
-            }
-        }
-        
-        // If we found a block to insert after, do it
-        if ($found && $insert_after_index >= 0) {
-            // Insert after the found block
-            array_splice($blocks, $insert_after_index + 1, 0, array($new_block));
-            
-            // Serialize and update
-            $new_content = serialize_blocks($blocks);
-            return self::update_template_content($template_id, $new_content);
-        }
-        
-        // Fallback: If we found the heading but no text block, insert right after the heading
-        if ($neighborhood_heading_index >= 0 && !$found) {
-            array_splice($blocks, $neighborhood_heading_index + 1, 0, array($new_block));
-            $new_content = serialize_blocks($blocks);
-            return self::update_template_content($template_id, $new_content);
         }
         
         return new WP_Error('anchor_not_found', __('Neighborhood text block not found in template.', 'maloney-listings'));
@@ -1239,47 +1286,74 @@ class Maloney_Listings_Toolset_Template_Blocks {
     public static function replace_ninja_table_3596($post_type = 'listing', $dry_run = false) {
         $templates = self::get_templates_for_post_type($post_type);
         $results = array();
+        // Note: The shortcode auto-detects the current post ID on single listing pages
+        // and filters to that property only. On archive pages, it shows all condo listings.
         $replacement_shortcode = '[maloney_listing_condo_listings]';
         
+        // Pattern to match: [types field='current-condo-listings-table'][/types] or variations
+        $pattern = '/\[types[^\]]*field=[\'"]?current-condo-listings-table[\'"]?[^\]]*\](?:\[\/types\])?/i';
+        
         foreach ($templates as $template_id) {
+            $template = self::get_template($template_id);
+            if (!$template) {
+                $results[$template_id] = array(
+                    'success' => false,
+                    'error' => __('Template not found.', 'maloney-listings'),
+                    'replaced' => false,
+                );
+                continue;
+            }
+            
+            $content = $template->post_content;
+            
             if ($dry_run) {
-                $blocks = self::get_blocks($template_id);
-                if (is_wp_error($blocks)) {
-                    $results[$template_id] = array(
-                        'success' => false,
-                        'error' => $blocks->get_error_message(),
-                        'replaced' => false,
-                    );
-                    continue;
-                }
-                
-                $found = false;
-                self::check_for_pattern_recursive($blocks, 'current-condo-listings-table', $found);
+                // Check if pattern exists in content
+                $found = preg_match($pattern, $content);
                 
                 $results[$template_id] = array(
                     'success' => true,
-                    'found' => $found,
+                    'found' => (bool) $found,
                     'replaced' => false,
                 );
             } else {
-                $result = self::replace_block(
-                    $template_id,
-                    'current-condo-listings-table',
-                    'core/shortcode',
-                    array(),
-                    $replacement_shortcode
-                );
+                // First check if pattern exists before attempting replacement
+                $pattern_found = preg_match($pattern, $content);
                 
-                if (is_wp_error($result)) {
-                    $results[$template_id] = array(
-                        'success' => false,
-                        'error' => $result->get_error_message(),
-                        'replaced' => false,
-                    );
+                if ($pattern_found) {
+                    // Replace the shortcode pattern with new shortcode
+                    $new_content = preg_replace($pattern, $replacement_shortcode, $content);
+                    
+                    // Double-check that content actually changed (safety check)
+                    if ($new_content !== $content) {
+                        $result = self::update_template_content($template_id, $new_content);
+                        
+                        if (is_wp_error($result)) {
+                            $results[$template_id] = array(
+                                'success' => false,
+                                'error' => $result->get_error_message(),
+                                'replaced' => false,
+                            );
+                        } else {
+                            $results[$template_id] = array(
+                                'success' => true,
+                                'replaced' => true,
+                            );
+                        }
+                    } else {
+                        // Pattern found but replacement didn't change content (shouldn't happen)
+                        $results[$template_id] = array(
+                            'success' => true,
+                            'found' => true,
+                            'replaced' => false,
+                            'error' => __('Pattern found but replacement did not change content.', 'maloney-listings'),
+                        );
+                    }
                 } else {
+                    // Pattern not found - do NOT update template
                     $results[$template_id] = array(
                         'success' => true,
-                        'replaced' => $result,
+                        'found' => false,
+                        'replaced' => false,
                     );
                 }
             }

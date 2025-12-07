@@ -233,12 +233,8 @@ get_header(); ?>
                         <?php endif; ?>
                         
                         <?php 
-                        // Show condo listings table for condo properties (only for current property)
-                        if ($is_condo) {
-                            echo '<div class="listing-condo-listings-section" style="margin-top: 40px; padding-top: 40px; border-top: 2px solid #eee;">';
-                            echo do_shortcode('[maloney_listing_condo_listings title="Current Condo Listings" property_id="' . $post_id . '"]');
-                            echo '</div>';
-                        }
+                        // Condo listings are now managed via Template Blocks page
+                        // Removed automatic insertion - use Template Blocks page to add shortcode to templates
                         ?>
                             
                         </article>

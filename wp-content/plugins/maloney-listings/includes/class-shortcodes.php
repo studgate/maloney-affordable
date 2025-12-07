@@ -797,7 +797,7 @@ class Maloney_Listings_Shortcodes {
                     </tbody>
                 </table>
             <?php else : ?>
-                <p>No condo listings found.</p>
+                <p><?php _e('There is no current condo availability at this property. Applications submitted at this time will be added to the waitlist in the order they are received.', 'maloney-listings'); ?></p>
             <?php endif; ?>
         </div>
         

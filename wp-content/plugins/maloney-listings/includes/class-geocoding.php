@@ -105,8 +105,8 @@ class Maloney_Listings_Geocoding {
         }
         
         // Process listings per request - optimized batch size for WP Engine
-        // Increased to 15 since we now cache results and skip addresses that already have coordinates
-        $batch_size = 15; // Optimized for speed while respecting rate limits
+        // Reduced batch size to avoid timeouts, but process faster with better optimization
+        $batch_size = 5; // Very small batches to avoid WP Engine timeouts and rate limiting
         
         // Get listings without coordinates
         $args = array(
@@ -140,6 +140,14 @@ class Maloney_Listings_Geocoding {
                 $post_title = get_the_title($post_id);
                 $processed++;
                 
+                // Skip if already has coordinates (optimization)
+                $existing_lat = get_post_meta($post_id, '_listing_latitude', true);
+                $existing_lng = get_post_meta($post_id, '_listing_longitude', true);
+                if (!empty($existing_lat) && !empty($existing_lng)) {
+                    // Already geocoded, skip
+                    continue;
+                }
+                
                 $address = $this->build_address_from_fields($post_id);
                 if ($address) {
                     // Check cache first (much faster than API call)
@@ -159,7 +167,7 @@ class Maloney_Listings_Geocoding {
                             // Rate limited or timeout - mark as failed for this batch but will retry later
                             // Add a longer delay to respect rate limits
                             if (isset($coordinates['rate_limited'])) {
-                                sleep(3); // Wait 3 seconds if rate limited
+                                sleep(2); // Wait 2 seconds if rate limited (reduced from 3)
                             }
                             // Mark as failed so it can be retried in next batch
                             // Don't use continue - let it fall through to failed handling
@@ -179,6 +187,9 @@ class Maloney_Listings_Geocoding {
                         update_post_meta($post_id, '_listing_latitude', $coordinates['latitude']);
                         update_post_meta($post_id, '_listing_longitude', $coordinates['longitude']);
                         
+                        // Store the address that was geocoded for change detection
+                        update_post_meta($post_id, '_listing_geocoded_address', $address);
+                        
                         // Flag suspicious coordinates
                         if (isset($coordinates['suspicious']) && $coordinates['suspicious']) {
                             update_post_meta($post_id, '_listing_geocode_suspicious', '1');
@@ -194,9 +205,9 @@ class Maloney_Listings_Geocoding {
                     
                     // Only delay if we made an actual API call (not from cache)
                     // Nominatim requires at least 1 second between requests
-                    // Increased to 1.5 seconds to be safer and avoid rate limiting
+                    // Use 1.5 seconds to be safer and avoid rate limiting
                     if ($api_call_made && $processed < $query->post_count) {
-                        usleep(1500000); // 1.5 second delay between API calls
+                        usleep(1500000); // 1.5 second delay between API calls (safer for rate limits)
                     }
                 } else {
                     $failed++;
@@ -359,10 +370,10 @@ class Maloney_Listings_Geocoding {
     
     /**
      * Build geocoding address string
-     * Uses ONLY the address field - no longer combines with city/town
+     * Combines address field with city/state/zip if address is incomplete
      */
     private function build_address_from_fields($post_id) {
-        // Use ONLY the address field - users should enter the full address
+        // Get address field
         $address = get_post_meta($post_id, 'wpcf-address', true);
         if (empty($address)) {
             $address = get_post_meta($post_id, '_listing_address', true);
@@ -371,8 +382,56 @@ class Maloney_Listings_Geocoding {
         // Clean up duplicate city/state if present
         $address = $this->clean_duplicate_address($address);
         
-        // Return the address field as-is (no combining with city/town)
-        return !empty($address) ? trim($address) : '';
+        if (empty($address)) {
+            return '';
+        }
+        
+        $address = trim($address);
+        
+        // Check if address already has city/state/zip
+        $has_city_state = (
+            preg_match('/,\s*[A-Z]{2}\s+\d{5}/', $address) || // Has "MA 02101" pattern
+            preg_match('/,\s*Massachusetts/i', $address) ||
+            preg_match('/,\s*MA\s*,/i', $address) ||
+            preg_match('/,\s*\d{5}/', $address) // Has zip code
+        );
+        
+        // If address is incomplete (missing city/state/zip), try to add them
+        if (!$has_city_state) {
+            $city = get_post_meta($post_id, 'wpcf-city', true);
+            if (empty($city)) {
+                $city = get_post_meta($post_id, '_listing_city', true);
+            }
+            
+            $state = get_post_meta($post_id, 'wpcf-state', true);
+            if (empty($state)) {
+                $state = get_post_meta($post_id, '_listing_state', true);
+            }
+            if (empty($state)) {
+                $state = 'MA'; // Default to Massachusetts
+            }
+            
+            $zip = get_post_meta($post_id, 'wpcf-zip-code', true);
+            if (empty($zip)) {
+                $zip = get_post_meta($post_id, '_listing_zip_code', true);
+            }
+            
+            // Build complete address
+            $parts = array($address);
+            if (!empty($city)) {
+                $parts[] = $city;
+            }
+            if (!empty($state)) {
+                $parts[] = $state;
+            }
+            if (!empty($zip)) {
+                $parts[] = $zip;
+            }
+            
+            $address = implode(', ', $parts);
+        }
+        
+        return $address;
     }
     
     /**
@@ -611,12 +670,12 @@ class Maloney_Listings_Geocoding {
         $url = add_query_arg($params, $url);
         
         $response = wp_remote_get($url, array(
-            'timeout' => 60, // Increased timeout for slow connections and WP Engine
+            'timeout' => 20, // Increased timeout for slow responses and WP Engine
             'headers' => array(
                 'User-Agent' => 'Maloney Affordable Listings WordPress Plugin (https://www.maloneyaffordable.com)',
                 'Referer' => home_url(),
             ),
-            'sslverify' => false, // Some servers have SSL issues
+            'sslverify' => false, // Disable SSL verification for WP Engine compatibility
             'redirection' => 5,
             'httpversion' => '1.1', // Use HTTP/1.1 for better compatibility
         ));

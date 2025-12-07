@@ -201,6 +201,17 @@ class Maloney_Listings_Migration {
         // Migrate taxonomies
         $this->migrate_taxonomies($old_post->ID, $new_post_id);
         
+        // Migrate Content Template assignment (_views_template)
+        $old_template_id = get_post_meta($old_post->ID, '_views_template', true);
+        if (!empty($old_template_id) && is_numeric($old_template_id)) {
+            // Verify the template still exists
+            $template_post = get_post($old_template_id);
+            if ($template_post && $template_post->post_type === 'view-template') {
+                // Preserve the Content Template assignment
+                update_post_meta($new_post_id, '_views_template', $old_template_id);
+            }
+        }
+        
         // Create redirect from old URL to new URL
         $old_url = get_permalink($old_post->ID);
         $new_url = get_permalink($new_post_id);

@@ -210,8 +210,61 @@ class Maloney_Listings {
         //     $fields_setup->create_fields();
         // }
         
+        // Auto-create Listings menu item in Main Nav (menu ID 3)
+        $this->create_listings_menu_item();
+        
         // Flush rewrite rules
         flush_rewrite_rules();
+    }
+    
+    /**
+     * Create Listings menu item in Main Nav (menu ID 3)
+     */
+    private function create_listings_menu_item() {
+        $target_menu_id = 3; // Main Nav menu ID
+        
+        // Try to get menu by ID first
+        $menu = wp_get_nav_menu_object($target_menu_id);
+        
+        // If not found, try to find menu by name
+        if (!$menu || is_wp_error($menu)) {
+            $menus = wp_get_nav_menus();
+            foreach ($menus as $m) {
+                if (stripos($m->name, 'main') !== false || stripos($m->name, 'primary') !== false || $m->term_id == $target_menu_id) {
+                    $menu = $m;
+                    break;
+                }
+            }
+        }
+        
+        if (!$menu || is_wp_error($menu)) {
+            return; // Menu not found
+        }
+        
+        $menu_id = $menu->term_id;
+        
+        // Check if Listings menu item already exists
+        $menu_items = wp_get_nav_menu_items($menu_id);
+        if ($menu_items) {
+            foreach ($menu_items as $item) {
+                if ($item->object === 'listing' || (isset($item->url) && strpos($item->url, 'post_type=listing') !== false)) {
+                    return; // Already exists
+                }
+            }
+        }
+        
+        // Create menu item
+        $listings_url = get_post_type_archive_link('listing');
+        if (!$listings_url) {
+            $listings_url = home_url('/listings/');
+        }
+        
+        wp_update_nav_menu_item($menu_id, 0, array(
+            'menu-item-title' => 'Listings',
+            'menu-item-url' => $listings_url,
+            'menu-item-status' => 'publish',
+            'menu-item-type' => 'custom',
+        ));
     }
     
     public function deactivate() {

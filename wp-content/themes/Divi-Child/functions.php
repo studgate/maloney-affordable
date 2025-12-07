@@ -4,6 +4,15 @@
  * Maloney Affordable - Listing System
  */
 
+// Define plugin directory constant if not already defined (for page-listings.php template)
+if (!defined('MALONEY_LISTINGS_PLUGIN_DIR')) {
+    // Try to find the plugin directory
+    $plugin_path = WP_PLUGIN_DIR . '/maloney-listings';
+    if (file_exists($plugin_path)) {
+        define('MALONEY_LISTINGS_PLUGIN_DIR', trailingslashit($plugin_path));
+    }
+}
+
 // Enqueue parent theme styles
 function divi_child_enqueue_styles() {
     $parent_style = 'divi-style';

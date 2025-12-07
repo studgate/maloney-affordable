@@ -21,6 +21,10 @@
 8. [Common Tasks](#common-tasks)
 9. [Important Notes](#important-notes)
 10. [Troubleshooting](#troubleshooting)
+    - [Geocoding Issues - Address Updates Required](#geocoding-issues---address-updates-required)
+    - [Missing Bathrooms Information](#missing-bathrooms-information)
+    - [Property Name Mismatch Issues (Ninja Tables)](#property-name-mismatch-issues-ninja-tables)
+    - [Other Common Data Issues](#other-common-data-issues)
 
 ---
 
@@ -184,7 +188,7 @@ The **Rental Properties** field group will appear. Fill in:
 3. Click **"Add Row"** or the **"+"** button
 4. Fill in for each available unit:
    - **Unit Size** - Studio, 1-Bedroom, 2-Bedroom, etc.
-   - **Bathrooms** - Number of bathrooms
+   - **Bathrooms** - ⚠️ **Important:** Number of bathrooms (e.g., "1", "1.5", "2") - Always include if available
    - **Total Monthly Leasing Price** - Monthly rent
    - **Minimum Income** - Minimum income required
    - **Income Limit (AMI %)** - Percentage of Area Median Income
@@ -232,7 +236,7 @@ The **Rental Properties** field group will appear. Fill in:
    - **Property** - Select the property (auto-filled from the listing)
    - **Town** - City/Town with neighborhood (e.g., "Boston | West Roxbury")
    - **Unit Size** - Studio, 1-Bedroom, 2-Bedroom, etc.
-   - **Bathrooms** - Number of bathrooms
+   - **Bathrooms** - ⚠️ **Important:** Number of bathrooms (e.g., "1", "1.5", "2") - Always include if available
    - **Price** - Purchase price
    - **Income Limit (AMI %)** - Income limit as percentage (e.g., "80%" or "80% (Min) - 100% (Max)")
    - **Type** - Lottery or FCFS (First Come First Serve)
@@ -472,6 +476,11 @@ If listings have addresses but no zip codes:
 - Regional addresses (like "Fenway" or "Jamaica Plain") will place the marker in the wrong location
 - The map needs a specific street address to show the correct location
 
+**If geocoding fails:**
+- Update the address to be complete and accurate
+- Go to **Listings → Geocode Addresses** to batch geocode after updating addresses
+- See [Geocoding Issues](#geocoding-issues---address-updates-required) in Troubleshooting section
+
 ### Geocoding is Automatic
 
 - ✅ Addresses are automatically geocoded when you save a listing
@@ -549,6 +558,106 @@ If listings have addresses but no zip codes:
 2. Are condo listing rows added in the "Current Condo Listings" field group?
 3. Is "Units Available" greater than 0?
 4. Is the listing published and active?
+
+### Geocoding Issues - Address Updates Required
+
+**⚠️ Important:** If listings are not appearing on the map or geocoding is failing:
+
+1. **Verify the address is complete and correct:**
+   - Go to **Listings → Geocode Addresses**
+   - Check which listings need geocoding
+   - Edit each listing and verify the **Property Address** field contains:
+     - ✅ Full street address (e.g., "123 Main Street")
+     - ✅ City name
+     - ✅ State abbreviation (MA)
+     - ✅ Zip code (5 digits)
+   
+2. **Update incorrect addresses:**
+   - Edit the listing
+   - Update the **Property Address** field with the complete, correct address
+   - Click **"Update"** - geocoding will happen automatically
+   - If it doesn't geocode automatically, use the **"Geocode Address"** button in the Geocode Address meta box
+
+3. **Common address issues:**
+   - ❌ Missing city/state/zip → Add complete address
+   - ❌ Regional names only (e.g., "Fenway", "Jamaica Plain") → Replace with full street address
+   - ❌ Duplicate city information → Remove duplicates
+   - ❌ Typos or misspellings → Correct spelling
+
+4. **After updating addresses:**
+   - Run batch geocoding: **Listings → Geocode Addresses → Start Geocoding**
+   - Wait for the process to complete
+   - Verify listings now appear on the map
+
+### Missing Bathrooms Information
+
+**For Current Availability (Rentals):**
+1. Edit the rental listing
+2. Find the **"Current Rental Availability"** field group
+3. For each unit row, check if **"Bathrooms"** field is filled in
+4. If missing, add the number of bathrooms (e.g., "1", "1.5", "2")
+5. Click **"Update"** to save
+
+**For Current Condo Listings:**
+1. Edit the condo listing
+2. Find the **"Current Condo Listings"** field group
+3. For each condo unit row, check if **"Bathrooms"** field is filled in
+4. If missing, add the number of bathrooms (e.g., "1", "1.5", "2")
+5. Click **"Update"** to save
+
+**Note:** Bathrooms information helps users filter and find units that match their needs. Always include this information when available.
+
+### Property Name Mismatch Issues (Ninja Tables)
+
+**⚠️ Critical:** If availability or condo listings are not showing correctly, check that property names match:
+
+1. **The Problem:**
+   - Current Availability (rentals) and Current Condo Listings pull data from Ninja Tables
+   - These tables reference properties by **Property Name**
+   - If the property name in the Ninja Table doesn't exactly match the listing title, units won't be associated correctly
+
+2. **How to Fix:**
+   - Go to **Listings → All Listings**
+   - Note the exact **Property Name** (title) for each listing
+   - Check the Ninja Tables:
+     - **Current Availability** (Rentals): Go to **Ninja Tables → View Table** (find the rental availability table)
+     - **Current Condo Listings**: Go to **Ninja Tables → View Table** (find the condo listings table)
+   - In the Ninja Table, find the **"Property"** or **"Property Name"** column
+   - Verify the property name in the table **exactly matches** the listing title
+   - If they don't match:
+     - Option 1: Update the listing title to match the Ninja Table
+     - Option 2: Update the Ninja Table to match the listing title
+     - **Recommendation:** Update the Ninja Table to match the listing title (listing titles are the source of truth)
+
+3. **Example:**
+   - Listing title: "The Overlook at Boston"
+   - Ninja Table has: "Overlook at Boston" (missing "The")
+   - **Fix:** Update Ninja Table to "The Overlook at Boston" OR update listing to "Overlook at Boston"
+   - They must match exactly (case-sensitive)
+
+4. **After fixing names:**
+   - Re-run migration if needed: **Listings → Migrate Available Units** or **Listings → Migrate Condo Listings**
+   - Verify units now appear correctly on the listing pages
+
+### Other Common Data Issues
+
+**Incomplete Unit Information:**
+- Always fill in all available fields for units (bathrooms, income limits, accessible units, etc.)
+- Missing information makes it harder for users to find suitable units
+
+**Outdated Availability:**
+- Regularly update "Units Available" when units are rented/sold
+- Set "Units Available" to 0 when no units are available
+- Remove or archive old availability entries
+
+**Incorrect Income Limits:**
+- Verify income limits match the property's actual requirements
+- Use consistent format (e.g., "80%" or "80% (Min) - 100% (Max)")
+- Check that AMI percentages are accurate
+
+**Missing Links:**
+- For rentals: Ensure "Online Application URL" is filled in if applications are open
+- For condos: Verify "Learn More Link" points to the correct property page
 
 ---
 
